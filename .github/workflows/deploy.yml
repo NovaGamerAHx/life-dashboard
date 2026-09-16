@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────────────────
+# بیلد و استقرار خودکار روی GitHub Pages
+#
+# با هر push روی شاخه master:
+#   ۱) وابستگی‌ها با npm ci (بر اساس lock-file) نصب می‌شوند
+#   ۲) لینت و تایپ‌چک + بیلد پروداکشن اجرا می‌شود
+#   ۳) خروجی dist روی GitHub Pages مستقر می‌شود
+#
+# پیش‌نیاز (فقط یک بار): در تنظیمات ریپو
+#   Settings → Pages → Build and deployment → Source: "GitHub Actions"
+# ─────────────────────────────────────────────────────────────
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  # امکان اجرای دستی از تب Actions
+  workflow_dispatch:
+
+# حداقل دسترسی لازم برای استقرار Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# فقط آخرین استقرار در صف بماند؛ استقرارِ در حال اجرا قطع نشود
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (type-check + vite build)
+        run: npm run build
+
+      - name: Add .nojekyll
+        run: touch dist/.nojekyll
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

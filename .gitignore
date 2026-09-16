@@ -1,0 +1,35 @@
+# وابستگی‌ها
+node_modules/
+
+# خروجی بیلد
+dist/
+dist-ssr/
+
+# لاگ‌ها
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# فایل‌های محیطی
+.env
+.env.local
+.env.*.local
+
+# ادیتور و سیستم‌عامل
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# کش‌ها
+.eslintcache
+*.tsbuildinfo

@@ -220,7 +220,7 @@ export default function Finance() {
                             <span className={cx('tabular shrink-0 text-[13px] font-black', t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100')}>
                               {t.type === 'income' ? '+' : '−'}{fmt(t.amount)}
                             </span>
-                            <span className="hidden shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100 sm:flex">
+                            <span className="flex shrink-0 items-center gap-1 transition sm:opacity-0 sm:group-hover:opacity-100">
                               <button onClick={() => { setEdit(t); setShowTx(true); }} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-sky-500/10 hover:text-sky-600" title="ویرایش">
                                 <Pencil size={14} />
                               </button>

@@ -8,7 +8,7 @@ import { useApp } from '../lib/store';
 import {
   getMonthGrid, addMonthsJalali, J_MONTHS, J_WEEKDAYS_SHORT, toJalaali,
   toFa, formatJalali, todayStart, toGregorian, startOfDay, addDays,
-  weekdayName, diffDays, formatTime,
+  weekdayName, diffDays, jalaaliMonthLength, formatGregorian,
 } from '../lib/jalali';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHead, Btn, Badge, Empty, Confirm, Segmented } from '../components/ui';
@@ -226,7 +226,7 @@ export default function Calendar() {
                         {e.desc && <span>{e.desc}</span>}
                       </p>
                     </div>
-                    <span className="flex shrink-0 gap-0.5 opacity-0 transition group-hover:opacity-100">
+                    <span className="flex shrink-0 gap-0.5 transition sm:opacity-0 sm:group-hover:opacity-100">
                       <button onClick={() => { setEdit(e); setShowM(true); }} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-sky-500/10 hover:text-sky-600"><Pencil size={13} /></button>
                       <button onClick={() => setConfirmId(e.id)} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500"><Trash2 size={13} /></button>
                     </span>
@@ -327,32 +327,43 @@ function Converter() {
   const [jy, setJy] = useState(today.jy);
   const [jm, setJm] = useState(today.jm);
   const [jd, setJd] = useState(today.jd);
+  // تعداد روزهای واقعی ماه انتخابی (جلوی تاریخ نامعتبر مثل ۳۱ اسفند گرفته می‌شود)
+  const monthLen = jalaaliMonthLength(jy, jm);
   const g = useMemo(() => {
     try {
-      const d = toGregorian(jy, jm, Math.min(jd, 29) <= 29 ? jd : jd);
-      return d;
+      return toGregorian(jy, jm, Math.min(jd, jalaaliMonthLength(jy, jm)));
     } catch {
       return null;
     }
   }, [jy, jm, jd]);
+  const pickMonth = (m: number) => {
+    setJm(m);
+    setJd((d) => Math.min(d, jalaaliMonthLength(jy, m)));
+  };
+  const pickYear = (y: number) => {
+    setJy(y);
+    setJd((d) => Math.min(d, jalaaliMonthLength(y, jm)));
+  };
   return (
     <Card>
       <CardHead title="مبدل تاریخ شمسی به میلادی" sub="هر تاریخی را تبدیل کن" />
       <div className="flex flex-wrap items-center gap-3 px-5 pb-5">
-        <select value={jd} onChange={(e) => setJd(Number(e.target.value))} className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-[13px] dark:border-white/10 dark:bg-white/5">
-          {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{toFa(d)}</option>)}
+        <select value={Math.min(jd, monthLen)} onChange={(e) => setJd(Number(e.target.value))} className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-[13px] dark:border-white/10 dark:bg-white/5">
+          {Array.from({ length: monthLen }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{toFa(d)}</option>)}
         </select>
-        <select value={jm} onChange={(e) => setJm(Number(e.target.value))} className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-[13px] dark:border-white/10 dark:bg-white/5">
+        <select value={jm} onChange={(e) => pickMonth(Number(e.target.value))} className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-[13px] dark:border-white/10 dark:bg-white/5">
           {J_MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
         </select>
-        <select value={jy} onChange={(e) => setJy(Number(e.target.value))} className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-[13px] dark:border-white/10 dark:bg-white/5">
+        <select value={jy} onChange={(e) => pickYear(Number(e.target.value))} className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-[13px] dark:border-white/10 dark:bg-white/5">
           {Array.from({ length: 11 }, (_, i) => today.jy - 5 + i).map((y) => <option key={y} value={y}>{toFa(y)}</option>)}
         </select>
         <span className="text-slate-300">←</span>
         <span className="tabular rounded-xl bg-slate-100 px-4 py-2.5 text-[13px] font-black text-slate-700 dark:bg-white/10 dark:text-slate-100" dir="ltr">
           {g ? `${g.getFullYear()}/${String(g.getMonth() + 1).padStart(2, '0')}/${String(g.getDate()).padStart(2, '0')}` : '—'}
         </span>
-        <span className="text-xs text-slate-400">{g ? `(${weekdayName(g.getTime())} • ${formatTime(g.getTime()).replace(/[۰-۹]/g, (d) => d)} — ${['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'][g.getDay()]})` : ''}</span>
+        <span className="text-xs text-slate-400">
+          {g ? `(${weekdayName(g.getTime())} • ${formatGregorian(g.getTime())})` : ''}
+        </span>
       </div>
     </Card>
   );

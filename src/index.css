@@ -81,6 +81,25 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: rgb(16 185 129 / 0.28);
 }
 
+/* فوکوس قابل مشاهده برای دسترس‌پذیری بهتر با کیبورد */
+:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* احترام به تنظیم کاهش حرکت سیستم‌عامل */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 @media print {
   .no-print { display: none !important; }
 }

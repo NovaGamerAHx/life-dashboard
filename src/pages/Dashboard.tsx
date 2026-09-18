@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import {
   TrendingUp, TrendingDown, ListTodo, CalendarDays, Flame,
   Plus, ArrowLeft, CheckCircle2, Clock, Sparkles, ChevronLeft,
+  Activity, Star, StickyNote, MoonStar,
 } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { useMoney } from '../lib/money';
@@ -14,7 +15,7 @@ import {
 import { jalaliMonthRange, sumTx, dailySeries, groupByCategory, habitStreak } from '../lib/stats';
 import { CAT_COLORS } from '../lib/types';
 import { Card, CardHead, Btn, Badge, Empty } from '../components/ui';
-import { Donut, Legend } from '../components/charts';
+import { Donut, Legend, Bars } from '../components/charts';
 import { cx } from '../lib/utils';
 
 const fadeUp = {
@@ -32,15 +33,15 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: 'tx' | 'task
 
   const month = useMemo(() => jalaliMonthRange(Date.now()), []);
   const monthTx = useMemo(
-    () => state.transactions.filter((t) => t.date >= month.start && t.date <= month.end),
-    [state.transactions, month],
+    () => (finOn ? state.transactions.filter((t) => t.date >= month.start && t.date <= month.end) : []),
+    [state.transactions, month, finOn],
   );
   const inc = sumTx(monthTx, 'income');
   const exp = sumTx(monthTx, 'expense');
   const bal = inc - exp;
 
-  const series = useMemo(() => dailySeries(14, state.transactions, 'expense'), [state.transactions]);
-  const incomeSeries = useMemo(() => dailySeries(14, state.transactions, 'income'), [state.transactions]);
+  const series = useMemo(() => (finOn ? dailySeries(14, state.transactions, 'expense') : []), [state.transactions, finOn]);
+  const incomeSeries = useMemo(() => (finOn ? dailySeries(14, state.transactions, 'income') : []), [state.transactions, finOn]);
   const catGroups = useMemo(() => groupByCategory(monthTx.filter((t) => t.type === 'expense')), [monthTx]);
 
   const openTasks = useMemo(() => state.tasks.filter((t) => t.status !== 'done' && !t.backlog), [state.tasks]);
@@ -56,7 +57,7 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: 'tx' | 'task
     [state.events, today],
   );
 
-  const recentTx = useMemo(() => state.transactions.slice(0, 6), [state.transactions]);
+  const recentTx = useMemo(() => (finOn ? state.transactions.slice(0, 6) : []), [state.transactions, finOn]);
 
   const donut = useMemo(
     () =>
@@ -68,13 +69,32 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: 'tx' | 'task
     [catGroups],
   );
 
+  const activeHabits = useMemo(() => state.habits.filter((h) => !h.archived), [state.habits]);
   const habitToday = useMemo(() => {
-    return state.habits.map((h) => ({
+    return activeHabits.map((h) => ({
       h,
       done: !!state.habitLogs[`${h.id}:${today}`],
       streak: habitStreak(h.id, state.habitLogs),
     }));
-  }, [state.habits, state.habitLogs, today]);
+  }, [activeHabits, state.habitLogs, today]);
+
+  // ── آمار جایگزین حالت بدون مالی ──
+  const todayTasksAll = useMemo(
+    () => state.tasks.filter((t) => !t.backlog && t.due === today),
+    [state.tasks, today],
+  );
+  const todayDone = todayTasksAll.filter((t) => t.status === 'done').length;
+  const todayPct = todayTasksAll.length ? Math.round((todayDone / todayTasksAll.length) * 100) : 0;
+
+  const last7Refs = useMemo(() => {
+    const from = addDays(today, -6);
+    return (state.reflections ?? []).filter((r) => r.day >= from && r.day <= today);
+  }, [state.reflections, today]);
+  const scoredRefs = last7Refs.filter((r) => r.score != null);
+  const avgScore7 = scoredRefs.length
+    ? +(scoredRefs.reduce((a, r) => a + (r.score ?? 0), 0) / scoredRefs.length).toFixed(1)
+    : null;
+  const sportDays7 = last7Refs.filter((r) => r.sport).length;
 
   const name = state.profile.name?.trim();
   const labels = series.map((s) => toFa(toJalaali(new Date(s.day)).jd));
@@ -117,7 +137,9 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: 'tx' | 'task
             </div>
           </div>
           <div className="hidden shrink-0 items-center gap-3 md:flex">
-            {finOn && <MiniStat label="مانده این ماه" value={withUnit(bal)} neg={bal < 0} />}
+            {finOn
+              ? <MiniStat label="مانده این ماه" value={withUnit(bal)} neg={bal < 0} />
+              : <MiniStat label="پیشرفت امروز" value={todayTasksAll.length ? `${toFa(todayPct)}٪` : 'بدون تسک'} />}
             <MiniStat label="وظایف باز" value={`${toFa(openTasks.length)} وظیفه`} />
             <MiniStat label="رویداد امروز" value={`${toFa(todayEvents.length)} رویداد`} />
           </div>
@@ -126,73 +148,106 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: 'tx' | 'task
 
       {/* کارت‌های خلاصه */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {finOn && (
+        {finOn ? (
           <>
             <StatCard delay={0.05} icon={<TrendingUp size={20} />} tone="green" label={`درآمد ${J_MONTHS[j.jm - 1]}`} value={withUnit(inc)} sub={`${toFa(monthTx.filter((t) => t.type === 'income').length)} تراکنش`} />
             <StatCard delay={0.1} icon={<TrendingDown size={20} />} tone="rose" label={`هزینه ${J_MONTHS[j.jm - 1]}`} value={withUnit(exp)} sub={`${toFa(monthTx.filter((t) => t.type === 'expense').length)} تراکنش`} />
+            <StatCard delay={0.15} icon={<ListTodo size={20} />} tone="sky" label="وظایف باز" value={`${toFa(openTasks.length)} وظیفه`} sub={overdue.length > 0 ? `${toFa(overdue.length)} سررسید گذشته` : `${toFa(doneThisWeek)} انجام‌شده در ۷ روز اخیر`} alert={overdue.length > 0} />
+            <StatCard delay={0.2} icon={<Flame size={20} />} tone="amber" label="بهترین استریک عادت" value={habitToday.length ? `${toFa(Math.max(...habitToday.map((x) => x.streak), 0))} روز` : '—'} sub={`${toFa(habitToday.filter((x) => x.done).length)} از ${toFa(habitToday.length)} امروز انجام شد`} />
+          </>
+        ) : (
+          <>
+            <StatCard delay={0.05} icon={<ListTodo size={20} />} tone="sky" label="بهره‌وری امروز" value={todayTasksAll.length ? `${toFa(todayPct)}٪` : 'بدون تسک'} sub={todayTasksAll.length ? `${toFa(todayDone)} از ${toFa(todayTasksAll.length)} انجام شد` : 'روز سبکی داری ✨'} alert={overdue.length > 0} />
+            <StatCard delay={0.1} icon={<Flame size={20} />} tone="amber" label="بهترین استریک عادت" value={habitToday.length ? `${toFa(Math.max(...habitToday.map((x) => x.streak), 0))} روز` : '—'} sub={`${toFa(habitToday.filter((x) => x.done).length)} از ${toFa(habitToday.length)} امروز انجام شد`} />
+            <StatCard delay={0.15} icon={<Star size={20} />} tone="violet" label="میانگین نمره ۷ روز" value={avgScore7 != null ? `${toFa(avgScore7)} از ۱۰` : 'ثبت نشده'} sub={scoredRefs.length ? `${toFa(scoredRefs.length)} روز ثبت‌شده` : 'در صفحه «روز جاری» نمره بده'} />
+            <StatCard delay={0.2} icon={<Activity size={20} />} tone="green" label="ورزش ۷ روز اخیر" value={`${toFa(sportDays7)} روز`} sub={sportDays7 > 0 ? 'آفرین، ادامه بده! 💪' : 'هنوز ورزشی ثبت نشده'} />
           </>
         )}
-        <StatCard delay={0.15} icon={<ListTodo size={20} />} tone="sky" label="وظایف باز" value={`${toFa(openTasks.length)} وظیفه`} sub={overdue.length > 0 ? `${toFa(overdue.length)} سررسید گذشته` : `${toFa(doneThisWeek)} انجام‌شده در ۷ روز اخیر`} alert={overdue.length > 0} />
-        <StatCard delay={0.2} icon={<Flame size={20} />} tone="amber" label="بهترین استریک عادت" value={habitToday.length ? `${toFa(Math.max(...habitToday.map((x) => x.streak), 0))} روز` : '—'} sub={`${toFa(habitToday.filter((x) => x.done).length)} از ${toFa(habitToday.length)} امروز انجام شد`} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
-        {/* روند مالی */}
-        {finOn && (
+        {/* روند مالی / روند بهره‌وری */}
+        {finOn ? (
           <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.1 }} className="xl:col-span-2">
             <Card>
               <CardHead
                 title="روند ۱۴ روز اخیر"
                 sub="مقایسه هزینه و درآمد روزانه"
-              action={
-                <Link to="/reports" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">
-                  گزارش کامل <ChevronLeft size={14} />
-                </Link>
-              }
-            />
-            <div className="px-4 pb-2">
-              <div className="mb-2 flex items-center gap-4 px-1 text-[11px] font-bold text-slate-500">
-                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> هزینه</span>
-                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> درآمد</span>
+                action={
+                  <Link to="/reports" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">
+                    گزارش کامل <ChevronLeft size={14} />
+                  </Link>
+                }
+              />
+              <div className="px-4 pb-2">
+                <div className="mb-2 flex items-center gap-4 px-1 text-[11px] font-bold text-slate-500">
+                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> هزینه</span>
+                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> درآمد</span>
+                </div>
+                <DualArea expense={series.map((s) => s.value)} income={incomeSeries.map((s) => s.value)} labels={labels} />
               </div>
-              <DualArea expense={series.map((s) => s.value)} income={incomeSeries.map((s) => s.value)} labels={labels} />
-            </div>
-            {/* تراکنش‌های اخیر */}
-            <div className="border-t border-slate-100 px-5 py-4 dark:border-white/5">
-              <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-[13px] font-extrabold text-slate-700 dark:text-slate-200">تراکنش‌های اخیر</h4>
-                <Link to="/finance" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">
-                  همه <ArrowLeft size={13} />
-                </Link>
+              {/* تراکنش‌های اخیر */}
+              <div className="border-t border-slate-100 px-5 py-4 dark:border-white/5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-[13px] font-extrabold text-slate-700 dark:text-slate-200">تراکنش‌های اخیر</h4>
+                  <Link to="/finance" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">
+                    همه <ArrowLeft size={13} />
+                  </Link>
+                </div>
+                {recentTx.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-slate-400">هنوز تراکنشی ثبت نشده است</p>
+                ) : (
+                  <ul className="divide-y divide-slate-50 dark:divide-white/5">
+                    {recentTx.map((t) => (
+                      <li key={t.id} className="flex items-center gap-3 py-2.5">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-base" style={{ background: `${CAT_COLORS[t.category] ?? '#64748b'}1a` }}>
+                          {t.type === 'income' ? '💰' : catEmoji(t.category)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{t.title}</span>
+                          <span className="block text-[11px] text-slate-400">{t.category} • {smartDate(t.date)}</span>
+                        </span>
+                        <span className={cx('tabular text-[13px] font-black', t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200')}>
+                          {t.type === 'income' ? '+' : '−'}{fmt(t.amount)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              {recentTx.length === 0 ? (
-                <p className="py-4 text-center text-xs text-slate-400">هنوز تراکنشی ثبت نشده است</p>
-              ) : (
-                <ul className="divide-y divide-slate-50 dark:divide-white/5">
-                  {recentTx.map((t) => (
-                    <li key={t.id} className="flex items-center gap-3 py-2.5">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-base" style={{ background: `${CAT_COLORS[t.category] ?? '#64748b'}1a` }}>
-                        {t.type === 'income' ? '💰' : catEmoji(t.category)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{t.title}</span>
-                        <span className="block text-[11px] text-slate-400">{t.category} • {smartDate(t.date)}</span>
-                      </span>
-                      <span className={cx('tabular text-[13px] font-black', t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200')}>
-                        {t.type === 'income' ? '+' : '−'}{fmt(t.amount)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </Card>
-        </motion.div>
+            </Card>
+          </motion.div>
+        ) : (
+          <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.1 }} className="xl:col-span-2">
+            <Card>
+              <CardHead
+                title="روند بهره‌وری ۱۴ روز اخیر"
+                sub="درصد انجام تسک‌های هر روز"
+                action={
+                  <Link to="/reports" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">
+                    گزارش کامل <ChevronLeft size={14} />
+                  </Link>
+                }
+              />
+              <div className="px-5 pb-2">
+                <ProductivityTrend />
+              </div>
+              <div className="border-t border-slate-100 px-5 py-4 dark:border-white/5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-[13px] font-extrabold text-slate-700 dark:text-slate-200">یادداشت‌های سنجاق‌شده 📌</h4>
+                  <Link to="/notes" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">
+                    همه <ArrowLeft size={13} />
+                  </Link>
+                </div>
+                <PinnedNotes onQuickAdd={onQuickAdd} />
+              </div>
+            </Card>
+          </motion.div>
         )}
 
         <div className="space-y-5">
-          {/* دونات */}
-          {finOn && (
+          {/* دونات مالی / توزیع وظایف */}
+          {finOn ? (
             <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.15 }}>
               <Card>
                 <CardHead title={`هزینه‌های ${J_MONTHS[j.jm - 1]}`} sub="تفکیک بر اساس دسته" />
@@ -202,6 +257,25 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: 'tx' | 'task
                 </div>
               </Card>
             </motion.div>
+          ) : (
+            <>
+              <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.15 }}>
+                <Card>
+                  <CardHead title="توزیع وضعیت وظایف" sub="نمای کلی بار کاری" />
+                  <div className="flex flex-col items-center gap-4 px-5 pb-5">
+                    <TaskStatusDonut />
+                  </div>
+                </Card>
+              </motion.div>
+              <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.18 }}>
+                <Card>
+                  <CardHead title="حال ۷ روز اخیر" sub="از بازتاب‌های روزانه" />
+                  <div className="px-5 pb-5">
+                    <WeekMood />
+                  </div>
+                </Card>
+              </motion.div>
+            </>
           )}
 
           {/* برنامه امروز */}
@@ -253,12 +327,21 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: 'tx' | 'task
           </Card>
         </motion.div>
         {/* وظایف نزدیک */}
-        <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.15 }} className="xl:col-span-2">
+        <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.15 }} className={finOn ? 'xl:col-span-2' : ''}>
           <Card>
             <CardHead title="نزدیک‌ترین سررسیدها" sub="وظایف باز به ترتیب فوریت" action={<Link to="/tasks" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">مدیریت وظایف <ChevronLeft size={14} /></Link>} />
             <UpcomingTasks />
           </Card>
         </motion.div>
+        {/* بازتاب‌های اخیر — فقط در حالت بدون مالی */}
+        {!finOn && (
+          <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.2 }}>
+            <Card>
+              <CardHead title="بازتاب‌های اخیر" sub="حال و نمره روزهای گذشته" action={<Link to="/today" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">امروز <ChevronLeft size={14} /></Link>} />
+              <RecentReflections />
+            </Card>
+          </motion.div>
+        )}
       </div>
     </div>
   );
@@ -273,12 +356,15 @@ function MiniStat({ label, value, neg }: { label: string; value: string; neg?: b
   );
 }
 
-function StatCard({ icon, tone, label, value, sub, alert, delay }: { icon: React.ReactNode; tone: 'green' | 'rose' | 'sky' | 'amber'; label: string; value: string; sub: string; alert?: boolean; delay: number }) {
-  const tones: Record<string, string> = {
+type Tone = 'green' | 'rose' | 'sky' | 'amber' | 'violet';
+
+function StatCard({ icon, tone, label, value, sub, alert, delay }: { icon: React.ReactNode; tone: Tone; label: string; value: string; sub: string; alert?: boolean; delay: number }) {
+  const tones: Record<Tone, string> = {
     green: 'from-emerald-500 to-teal-600 shadow-emerald-600/20',
     rose: 'from-rose-500 to-pink-600 shadow-rose-600/20',
     sky: 'from-sky-500 to-blue-600 shadow-sky-600/20',
     amber: 'from-amber-500 to-orange-600 shadow-amber-600/20',
+    violet: 'from-violet-500 to-purple-600 shadow-violet-600/20',
   };
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay }}>
@@ -307,6 +393,15 @@ export function catEmoji(cat: string): string {
     'پوشاک': '👕', 'تفریح': '🎬', 'آموزش': '📚', 'خانه': '🏠', 'سایر': '📦',
   };
   return m[cat] ?? '💸';
+}
+
+export function moodFace(m: number | null | undefined): string {
+  if (m == null) return '—';
+  if (m <= 1) return '😞';
+  if (m === 2) return '😐';
+  if (m === 3) return '🙂';
+  if (m === 4) return '😄';
+  return '🤩';
 }
 
 function DualArea({ expense, income, labels }: { expense: number[]; income: number[]; labels: string[] }) {
@@ -351,16 +446,17 @@ function DualArea({ expense, income, labels }: { expense: number[]; income: numb
 function TodayHabits() {
   const { state, toggleHabit } = useApp();
   const today = todayStart();
-  if (state.habits.length === 0) {
+  const active = state.habits.filter((h) => !h.archived);
+  if (active.length === 0) {
     return (
       <div className="px-5 pb-5">
-        <Empty icon={<Flame size={26} />} title="هنوز عادتی نساخته‌ای" sub="از بخش عادت‌ها اولین عادت روزانه‌ات را بساز" action={<Link to="/habits"><Btn>ساخت عادت</Btn></Link>} />
+        <Empty icon={<Flame size={26} />} title="هنوز عادت فعالی نداری" sub="از بخش عادت‌ها اولین عادت روزانه‌ات را بساز" action={<Link to="/habits"><Btn>ساخت عادت</Btn></Link>} />
       </div>
     );
   }
   return (
     <ul className="space-y-2 px-5 pb-5">
-      {state.habits.slice(0, 5).map((h) => {
+      {active.slice(0, 5).map((h) => {
         const done = !!state.habitLogs[`${h.id}:${today}`];
         const streak = habitStreak(h.id, state.habitLogs);
         return (
@@ -383,9 +479,9 @@ function TodayHabits() {
           </li>
         );
       })}
-      {state.habits.length > 5 && (
+      {active.length > 5 && (
         <Link to="/habits" className="block pt-1 text-center text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">
-          {toFa(state.habits.length - 5)} عادت دیگر…
+          {toFa(active.length - 5)} عادت دیگر…
         </Link>
       )}
     </ul>
@@ -449,6 +545,176 @@ function UpcomingTasks() {
           </li>
         );
       })}
+    </ul>
+  );
+}
+
+// ── بخش‌های جایگزین حالت بدون مالی ────────────────────────────
+
+function ProductivityTrend() {
+  const { state } = useApp();
+  const data = useMemo(() => {
+    const today = todayStart();
+    const out: Array<{ label: string; value: number; color: string; dim?: boolean }> = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = addDays(today, -i);
+      const ts = state.tasks.filter((t) => !t.backlog && t.due === d);
+      const dn = ts.filter((t) => t.status === 'done').length;
+      const pct = ts.length ? Math.round((dn / ts.length) * 100) : -1;
+      out.push({
+        label: toFa(toJalaali(new Date(d)).jd),
+        value: Math.max(pct, 0),
+        color: pct < 0 ? '#cbd5e1' : pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#f43f5e',
+        dim: pct < 0,
+      });
+    }
+    return out;
+  }, [state.tasks]);
+  const withData = data.filter((d) => !d.dim);
+  const avg = withData.length ? Math.round(withData.reduce((a, d) => a + d.value, 0) / withData.length) : 0;
+  return (
+    <div>
+      <Bars data={data} formatTick={(v) => (v > 0 ? `${toFa(v)}٪` : '')} />
+      <p className="mt-2 text-center text-[11px] text-slate-400">
+        میانگین روزهایی که تسک داشتی: <b className="tabular text-emerald-600 dark:text-emerald-400">{toFa(avg)}٪</b>
+        {withData.length === 0 && ' — برای شروع، چند تسک زمان‌بندی کن'}
+      </p>
+    </div>
+  );
+}
+
+function PinnedNotes({ onQuickAdd }: { onQuickAdd: (k: 'tx' | 'task' | 'event' | 'note' | 'habit') => void }) {
+  const { state } = useApp();
+  const pinned = state.notes.filter((n) => n.pinned).slice(0, 4);
+  if (pinned.length === 0) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3.5 dark:bg-white/5">
+        <p className="text-xs text-slate-400">یادداشت مهمی را سنجاق کن تا همیشه اینجا ببینی 📌</p>
+        <button onClick={() => onQuickAdd('note')} className="flex shrink-0 items-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700">
+          <Plus size={14} /> یادداشت
+        </button>
+      </div>
+    );
+  }
+  return (
+    <ul className="grid gap-2 sm:grid-cols-2">
+      {pinned.map((n) => (
+        <li key={n.id}>
+          <Link
+            to="/notes"
+            className="flex h-full items-start gap-2.5 rounded-2xl border border-slate-100 p-3 transition hover:border-amber-300 hover:shadow-md dark:border-white/5"
+            style={{ background: `linear-gradient(180deg, ${n.color}44 0%, transparent 70px)` }}
+          >
+            <StickyNote size={16} className="mt-0.5 shrink-0 text-amber-500" />
+            <span className="min-w-0">
+              <span className="block truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{n.title}</span>
+              {n.body && <span className="mt-0.5 block truncate text-[11px] text-slate-400">{n.body.split('\n')[0]}</span>}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function TaskStatusDonut() {
+  const { state } = useApp();
+  const todo = state.tasks.filter((t) => !t.backlog && t.status === 'todo').length;
+  const doing = state.tasks.filter((t) => !t.backlog && t.status === 'doing').length;
+  const done = state.tasks.filter((t) => !t.backlog && t.status === 'done').length;
+  const backlogN = state.tasks.filter((t) => t.backlog && t.status !== 'done').length;
+  const total = todo + doing + done;
+  if (total + backlogN === 0) {
+    return <p className="py-6 text-center text-xs text-slate-400">هنوز وظیفه‌ای ثبت نشده است</p>;
+  }
+  const data = [
+    { label: 'برای انجام', value: todo, color: '#94a3b8' },
+    { label: 'در حال انجام', value: doing, color: '#0ea5e9' },
+    { label: 'انجام‌شده', value: done, color: '#10b981' },
+    ...(backlogN > 0 ? [{ label: 'بک‌لاگ باز', value: backlogN, color: '#f59e0b' }] : []),
+  ];
+  const rate = total ? Math.round((done / total) * 100) : 0;
+  return (
+    <>
+      <Donut data={data} centerTop="نرخ انجام" centerBottom={`${toFa(rate)}٪`} />
+      <div className="w-full">
+        <Legend items={data} money={(v) => `${toFa(v)} تسک`} />
+      </div>
+    </>
+  );
+}
+
+function WeekMood() {
+  const { state } = useApp();
+  const today = todayStart();
+  const days: number[] = [];
+  for (let i = 6; i >= 0; i--) days.push(addDays(today, -i));
+  const refs = new Map((state.reflections ?? []).map((r) => [r.day, r]));
+  return (
+    <div className="flex gap-1.5" dir="ltr">
+      {days.map((d) => {
+        const r = refs.get(d);
+        const isToday = d === today;
+        return (
+          <div
+            key={d}
+            title={`${formatJalali(d)}${r ? ` — حال: ${moodFace(r.mood)}${r.score != null ? ` • نمره: ${r.score}` : ''}` : ' — ثبت نشده'}`}
+            className={cx(
+              'flex flex-1 flex-col items-center gap-1 rounded-xl border py-2 transition',
+              r ? 'border-transparent bg-violet-500/10' : 'border-slate-100 dark:border-white/5',
+              isToday && 'ring-2 ring-emerald-500/60',
+            )}
+          >
+            <span className="text-lg leading-none">{moodFace(r?.mood)}</span>
+            <span className="tabular text-[10px] font-black text-slate-400">{toFa(toJalaali(new Date(d)).jd)}</span>
+            {r?.score != null && (
+              <span className="tabular rounded-full bg-amber-500/15 px-1.5 text-[9px] font-black text-amber-600 dark:text-amber-300">
+                {toFa(r.score)}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RecentReflections() {
+  const { state } = useApp();
+  const list = useMemo(
+    () => [...(state.reflections ?? [])].sort((a, b) => b.day - a.day).slice(0, 4),
+    [state.reflections],
+  );
+  if (list.length === 0) {
+    return (
+      <div className="px-5 pb-5">
+        <Empty
+          icon={<MoonStar size={26} />}
+          title="هنوز بازتابی ثبت نشده"
+          sub="هر شب دو دقیقه بنویس؛ روند حالت اینجا نمایش داده می‌شود"
+          action={<Link to="/today"><Btn>رفتن به امروز</Btn></Link>}
+        />
+      </div>
+    );
+  }
+  return (
+    <ul className="space-y-2 px-5 pb-5">
+      {list.map((r) => (
+        <li key={r.day} className="rounded-2xl border border-slate-100 p-3 dark:border-white/5">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{moodFace(r.mood)}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black text-slate-700 dark:text-slate-200">{formatJalali(r.day, { weekday: true })}</p>
+              {r.wins && <p className="mt-0.5 truncate text-[11px] text-slate-400">🏆 {r.wins.split('\n')[0]}</p>}
+            </div>
+            {r.score != null && (
+              <span className="tabular flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-600 dark:text-amber-300">
+                <Star size={11} />{toFa(r.score)}
+              </span>
+            )}
+          </div>
+        </li>
+      ))}
     </ul>
   );
 }

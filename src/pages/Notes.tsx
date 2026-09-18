@@ -99,7 +99,7 @@ export default function Notes() {
                   title={n.pinned ? 'برداشتن سنجاق' : 'سنجاق کردن'}
                   className={cx(
                     'grid h-7 w-7 shrink-0 place-items-center rounded-lg transition',
-                    n.pinned ? 'bg-amber-500/15 text-amber-500' : 'text-slate-300 opacity-0 hover:bg-slate-100 hover:text-amber-500 group-hover:opacity-100 dark:hover:bg-white/10',
+                    n.pinned ? 'bg-amber-500/15 text-amber-500' : 'text-slate-300 hover:bg-slate-100 hover:text-amber-500 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:bg-white/10',
                   )}
                 >
                   {n.pinned ? <Pin size={14} fill="currentColor" /> : <PinOff size={14} />}
@@ -125,7 +125,7 @@ export default function Notes() {
               )}
               <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5 dark:border-white/5">
                 <span className="text-[10px] text-slate-400">{formatJalali(n.updatedAt)}</span>
-                <span className="flex gap-0.5 opacity-0 transition group-hover:opacity-100">
+                <span className="flex gap-0.5 transition sm:opacity-0 sm:group-hover:opacity-100">
                   <button onClick={() => copy(n)} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/10" title="کپی متن">
                     {copied === n.id ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
                   </button>

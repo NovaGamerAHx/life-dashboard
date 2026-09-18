@@ -245,7 +245,13 @@ export function Shell({
   onQuickAdd: (k: 'tx' | 'task' | 'event' | 'note' | 'habit') => void;
 }) {
   const loc = useLocation();
-  const meta = TITLES[loc.pathname] ?? TITLES['/'];
+  const { state: shellState } = useApp();
+  const finOff = !shellState.settings.financeEnabled;
+  const gregFirst = shellState.settings.calSystem === 'gregorian';
+  const meta =
+    loc.pathname === '/reports' && finOff
+      ? { t: 'گزارش‌ها', s: 'تحلیل بهره‌وری، عادت‌ها و حال روزانه' }
+      : (TITLES[loc.pathname] ?? TITLES['/']);
   const badges = useNavBadges();
   const today = todayStart();
   const nav = useNAV();
@@ -304,9 +310,19 @@ export function Shell({
             <div className="hidden min-w-0 sm:block">
               <h1 className="truncate text-[15px] font-black text-slate-900 dark:text-white">{meta.t}</h1>
               <p className="truncate text-[11px] text-slate-400">
-                {formatJalali(today, { weekday: true })}
-                <span className="mx-1.5 text-slate-300 dark:text-slate-600">•</span>
-                <span dir="ltr" className="tabular">{formatGregorian(today)}</span>
+                {gregFirst ? (
+                  <>
+                    <span dir="ltr" className="tabular">{formatGregorian(today)}</span>
+                    <span className="mx-1.5 text-slate-300 dark:text-slate-600">•</span>
+                    {formatJalali(today, { weekday: true })}
+                  </>
+                ) : (
+                  <>
+                    {formatJalali(today, { weekday: true })}
+                    <span className="mx-1.5 text-slate-300 dark:text-slate-600">•</span>
+                    <span dir="ltr" className="tabular">{formatGregorian(today)}</span>
+                  </>
+                )}
               </p>
             </div>
             <div className="flex-1" />

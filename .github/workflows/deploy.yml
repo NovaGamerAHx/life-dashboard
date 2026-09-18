@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────
 # بیلد و استقرار خودکار روی GitHub Pages
 #
-# با هر push روی شاخه master:
+# با هر push روی شاخه main (یا master):
 #   ۱) وابستگی‌ها با npm ci (بر اساس lock-file) نصب می‌شوند
 #   ۲) لینت و تایپ‌چک + بیلد پروداکشن اجرا می‌شود
 #   ۳) خروجی dist روی GitHub Pages مستقر می‌شود
@@ -13,7 +13,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [master]
+    branches: [main, master]
   # امکان اجرای دستی از تب Actions
   workflow_dispatch:
 

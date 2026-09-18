@@ -2,21 +2,24 @@ import { useRef, useState } from 'react';
 import {
   User, Palette, Coins, Database, Download, Upload, RefreshCw,
   Trash2, ShieldCheck, Moon, Sun, Monitor, Check, Tags, Repeat, Plus, Pencil, BellRing,
+  CalendarDays, History, HardDrive, ClipboardPaste, Archive, ArchiveRestore, FileUp,
 } from 'lucide-react';
-import { useApp } from '../lib/store';
-import type { MoneyUnit, ThemeMode } from '../lib/types';
+import { useApp, validateBackup } from '../lib/store';
+import type { AppState, MoneyUnit, ThemeMode } from '../lib/types';
 import { TASK_CAT_COLORS, type Habit } from '../lib/types';
-import { Card, CardHead, Btn, Field, inputCls, Confirm, Segmented } from '../components/ui';
+import { Card, CardHead, Btn, Field, inputCls, Confirm, Segmented, Modal, Progress, Badge } from '../components/ui';
 import { ColorDots, HabitModal } from '../components/forms';
 import { downloadJson, readJsonFile, cx } from '../lib/utils';
-import { toFa } from '../lib/jalali';
+import { toFa, formatJalali, formatTime } from '../lib/jalali';
+import { formatBytes, backupFilename } from '../lib/backup';
 
 export default function Settings() {
   const {
-    state, setTheme, setUnit, setName, setFinanceEnabled,
+    state, setTheme, setUnit, setName, setFinanceEnabled, setWeekStart, setCalSystem,
+    setHabitArchived,
     importState, resetDemo, clearAll,
     addTaskCat, updateTaskCat, deleteTaskCat,
-    deleteHabit,
+    deleteHabit, storageBytes, autoBackups, restoreAutoBackup,
   } = useApp();
   const [name, setNameLocal] = useState(state.profile.name);
   const [msg, setMsg] = useState<{ ok: boolean; txt: string } | null>(null);
@@ -31,11 +34,17 @@ export default function Settings() {
   const [showHabitM, setShowHabitM] = useState(false);
   const [editHabit, setEditHabit] = useState<Habit | null>(null);
   const [confirmHabit, setConfirmHabit] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [preview, setPreview] = useState<AppState | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteTxt, setPasteTxt] = useState('');
+  const [pasteErr, setPasteErr] = useState('');
+  const [pendingAuto, setPendingAuto] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const flash = (ok: boolean, txt: string) => {
     setMsg({ ok, txt });
-    setTimeout(() => setMsg(null), 3500);
+    setTimeout(() => setMsg(null), 4000);
   };
 
   const counts = [
@@ -48,21 +57,54 @@ export default function Settings() {
   ];
 
   const doExport = () => {
-    downloadJson(`hamrah-backup-${new Date().toISOString().slice(0, 10)}.json`, state);
-    flash(true, 'فایل پشتیبان دانلود شد');
+    downloadJson(backupFilename(), state);
+    flash(true, 'فایل پشتیبان دانلود شد ✅');
   };
 
-  const doImport = async (f: File | undefined) => {
+  /** فایل را می‌خواند و در صورت معتبر بودن، پیش‌نمایش تأیید را باز می‌کند */
+  const handleFile = async (f: File | undefined) => {
     if (!f) return;
     try {
       const data = await readJsonFile(f);
-      const ok = importState(data as never);
-      flash(ok, ok ? 'داده‌ها با موفقیت بازیابی شدند' : 'فایل معتبر نیست — بازیابی انجام نشد');
-      if (ok) setNameLocal((data as { profile?: { name?: string } }).profile?.name ?? '');
+      const clean = validateBackup(data);
+      if (!clean) {
+        flash(false, 'فایل معتبر نیست — بازیابی انجام نشد');
+        return;
+      }
+      setPreview(clean);
     } catch {
       flash(false, 'خطا در خواندن فایل');
     }
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handlePaste = () => {
+    setPasteErr('');
+    if (!pasteTxt.trim()) {
+      setPasteErr('اول متن JSON پشتیبان را بچسبانید');
+      return;
+    }
+    try {
+      const data = JSON.parse(pasteTxt);
+      const clean = validateBackup(data);
+      if (!clean) {
+        setPasteErr('این متن یک فایل پشتیبان معتبر نیست');
+        return;
+      }
+      setPasteOpen(false);
+      setPasteTxt('');
+      setPreview(clean);
+    } catch {
+      setPasteErr('متن واردشده JSON معتبر نیست');
+    }
+  };
+
+  const confirmImport = () => {
+    if (!preview) return;
+    const ok = importState(preview);
+    flash(ok, ok ? 'داده‌ها با موفقیت بازیابی شدند ✅' : 'بازیابی انجام نشد');
+    if (ok) setNameLocal(preview.profile?.name ?? '');
+    setPreview(null);
   };
 
   const themes: Array<{ v: ThemeMode; label: string; icon: React.ReactNode }> = [
@@ -74,6 +116,8 @@ export default function Settings() {
     { v: 'toman', label: 'تومان', sub: 'نمایش کامل مبلغ' },
     { v: 'heazar', label: 'هزار تومان', sub: 'خلاصه و جمع‌وجور' },
   ];
+
+  const storagePct = Math.min(100, (storageBytes / (5 * 1024 * 1024)) * 100);
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
@@ -176,38 +220,67 @@ export default function Settings() {
       {state.settings.financeEnabled && (
         <Card>
           <CardHead title="واحد نمایش پول" sub="در همه بخش‌ها اعمال می‌شود" />
-        <div className="grid gap-2 px-5 pb-5 sm:grid-cols-2">
-          {units.map((u) => (
-            <button
-              key={u.v}
-              onClick={() => setUnit(u.v)}
-              className={cx(
-                'flex items-center gap-3 rounded-2xl border-2 p-3.5 text-right transition',
-                state.settings.unit === u.v
-                  ? 'border-emerald-500 bg-emerald-500/5'
-                  : 'border-slate-100 hover:border-slate-200 dark:border-white/5',
-              )}
-            >
-              <span className={cx(
-                'grid h-10 w-10 shrink-0 place-items-center rounded-xl',
-                state.settings.unit === u.v ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 dark:bg-white/10',
-              )}>
-                <Coins size={18} />
-              </span>
-              <span>
-                <span className="block text-[13px] font-black text-slate-700 dark:text-slate-100">{u.label}</span>
-                <span className="block text-[11px] text-slate-400">{u.sub}</span>
-              </span>
-              {state.settings.unit === u.v && <Check size={16} className="mr-auto text-emerald-500" />}
-            </button>
-          ))}
-        </div>
-        <div className="mx-5 mb-5 flex items-center gap-2 rounded-2xl bg-slate-50 px-3.5 py-3 text-[11px] text-slate-500 dark:bg-white/5 dark:text-slate-400">
-          <Palette size={15} className="shrink-0 text-slate-400" />
-          مثال: ۱۲٬۵۰۰٬۰۰۰ {state.settings.unit === 'heazar' ? '← «۱۲٬۵۰۰ هزار تومان» نمایش داده می‌شود' : '← «۱۲٬۵۰۰٬۰۰۰ تومان» نمایش داده می‌شود'}
-        </div>
+          <div className="grid gap-2 px-5 pb-5 sm:grid-cols-2">
+            {units.map((u) => (
+              <button
+                key={u.v}
+                onClick={() => setUnit(u.v)}
+                className={cx(
+                  'flex items-center gap-3 rounded-2xl border-2 p-3.5 text-right transition',
+                  state.settings.unit === u.v
+                    ? 'border-emerald-500 bg-emerald-500/5'
+                    : 'border-slate-100 hover:border-slate-200 dark:border-white/5',
+                )}
+              >
+                <span className={cx(
+                  'grid h-10 w-10 shrink-0 place-items-center rounded-xl',
+                  state.settings.unit === u.v ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 dark:bg-white/10',
+                )}>
+                  <Coins size={18} />
+                </span>
+                <span>
+                  <span className="block text-[13px] font-black text-slate-700 dark:text-slate-100">{u.label}</span>
+                  <span className="block text-[11px] text-slate-400">{u.sub}</span>
+                </span>
+                {state.settings.unit === u.v && <Check size={16} className="mr-auto text-emerald-500" />}
+              </button>
+            ))}
+          </div>
+          <div className="mx-5 mb-5 flex items-center gap-2 rounded-2xl bg-slate-50 px-3.5 py-3 text-[11px] text-slate-500 dark:bg-white/5 dark:text-slate-400">
+            <Palette size={15} className="shrink-0 text-slate-400" />
+            مثال: ۱۲٬۵۰۰٬۰۰۰ {state.settings.unit === 'heazar' ? '← «۱۲٬۵۰۰ هزار تومان» نمایش داده می‌شود' : '← «۱۲٬۵۰۰٬۰۰۰ تومان» نمایش داده می‌شود'}
+          </div>
         </Card>
       )}
+
+      {/* تقویم */}
+      <Card>
+        <CardHead title="تقویم" sub="شروع هفته و ترتیب نمایش تاریخ" />
+        <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2">
+          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-black text-slate-600 dark:text-slate-300">
+              <CalendarDays size={15} className="text-emerald-500" /> روز آغاز هفته
+            </p>
+            <Segmented
+              value={state.settings.weekStart}
+              onChange={setWeekStart}
+              options={[{ v: 'sat', label: 'شنبه' }, { v: 'mon', label: 'دوشنبه' }]}
+            />
+            <p className="mt-2 text-[11px] leading-5 text-slate-400">در گرید ماهانه تقویم اعمال می‌شود</p>
+          </div>
+          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-black text-slate-600 dark:text-slate-300">
+              <CalendarDays size={15} className="text-sky-500" /> تاریخ اصلی سربرگ
+            </p>
+            <Segmented
+              value={state.settings.calSystem}
+              onChange={setCalSystem}
+              options={[{ v: 'jalali', label: 'شمسی' }, { v: 'gregorian', label: 'میلادی' }]}
+            />
+            <p className="mt-2 text-[11px] leading-5 text-slate-400">تاریخ درشت سربرگ و بالای صفحات کدام تقویم باشد</p>
+          </div>
+        </div>
+      </Card>
 
       {/* داده‌ها */}
       <Card>
@@ -220,6 +293,18 @@ export default function Settings() {
               </span>
             ))}
           </div>
+
+          {/* حجم حافظه */}
+          <div className="mb-3 rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+            <div className="mb-2 flex items-center justify-between text-xs font-bold">
+              <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                <HardDrive size={15} className="text-sky-500" /> حافظه مصرف‌شده مرورگر
+              </span>
+              <span className="tabular text-slate-400">{formatBytes(storageBytes)} از حدود ۵ مگابایت</span>
+            </div>
+            <Progress value={storagePct} h={8} color={storagePct > 85 ? '#f43f5e' : storagePct > 60 ? '#f59e0b' : '#10b981'} />
+          </div>
+
           <div className="mb-3 flex items-center gap-2 rounded-2xl bg-emerald-500/[0.06] px-3.5 py-2.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-500/15 dark:text-emerald-300">
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
@@ -227,16 +312,72 @@ export default function Settings() {
             </span>
             ذخیره خودکار فعال است — هر تغییر بلافاصله در مرورگر ذخیره می‌شود
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Btn variant="outline" onClick={doExport}><Download size={15} /> دانلود پشتیبان (JSON)</Btn>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Btn variant="outline" onClick={doExport}><Download size={15} /> دانلود پشتیبان</Btn>
             <Btn variant="outline" onClick={() => fileRef.current?.click()}><Upload size={15} /> بازیابی از فایل</Btn>
+            <Btn variant="outline" onClick={() => { setPasteOpen(true); setPasteErr(''); }}><ClipboardPaste size={15} /> درج JSON متنی</Btn>
             <input
               ref={fileRef}
               type="file"
               accept="application/json,.json"
               className="hidden"
-              onChange={(e) => doImport(e.target.files?.[0])}
+              onChange={(e) => handleFile(e.target.files?.[0])}
             />
+          </div>
+
+          {/* درگ و دراپ */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files?.[0]); }}
+            onClick={() => fileRef.current?.click()}
+            className={cx(
+              'mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-4 text-xs font-bold transition',
+              dragOver
+                ? 'border-emerald-500 bg-emerald-500/5 text-emerald-600 dark:text-emerald-300'
+                : 'border-slate-200 text-slate-400 hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5',
+            )}
+          >
+            <FileUp size={17} />
+            فایل پشتیبان (.json) را اینجا رها کنید — یا کلیک کنید
+          </div>
+
+          {/* پشتیبان‌های خودکار */}
+          <div className="mt-4 rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+            <p className="mb-1 flex items-center gap-1.5 text-xs font-black text-slate-600 dark:text-slate-300">
+              <History size={15} className="text-violet-500" /> پشتیبان‌های خودکار
+              <Badge tone="violet">{toFa(autoBackups.length)} نسخه</Badge>
+            </p>
+            <p className="mb-3 text-[11px] leading-5 text-slate-400">
+              برنامه هر چند ساعت یک اسنپ‌شات امن در همین مرورگر نگه می‌دارد (حداکثر ۳ نسخه). اگر چیزی را اشتباه پاک کردید، از اینجا برگردانید.
+            </p>
+            {autoBackups.length === 0 ? (
+              <p className="rounded-xl bg-slate-50 py-3 text-center text-[11px] text-slate-400 dark:bg-white/5">
+                هنوز اسنپ‌شاتی گرفته نشده — با ادامه کار با برنامه، خودکار ساخته می‌شود
+              </p>
+            ) : (
+              <ul className="space-y-1.5">
+                {autoBackups.map((b) => (
+                  <li key={b.ts} className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 dark:bg-white/5">
+                    <span className="tabular text-[11px] font-black text-slate-600 dark:text-slate-200">
+                      {formatJalali(b.ts, { weekday: true })} • {formatTime(b.ts)}
+                    </span>
+                    <span className="tabular text-[10px] text-slate-400">
+                      {toFa(b.tasks)} وظیفه • {toFa(b.events)} رویداد • {toFa(b.habits)} عادت • {toFa(b.notes)} یادداشت
+                      {b.tx > 0 && ` • ${toFa(b.tx)} تراکنش`}
+                    </span>
+                    <span className="flex-1" />
+                    <Btn size="xs" variant="soft" onClick={() => setPendingAuto(b.ts)}>
+                      <History size={12} /> بازیابی این نسخه
+                    </Btn>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <Btn variant="soft" onClick={() => setConfirmReset(true)}><RefreshCw size={15} /> بازگشت به داده نمایشی</Btn>
             <Btn variant="ghost" onClick={() => setConfirmClear(true)} className="text-rose-500 hover:bg-rose-500/10"><Trash2 size={15} /> پاک کردن همه داده‌ها</Btn>
           </div>
@@ -300,7 +441,7 @@ export default function Settings() {
       <Card>
         <CardHead
           title="مدیریت عادت‌ها"
-          sub="ساخت، ویرایش و حذف عادت‌های روزانه"
+          sub="ساخت، ویرایش، بایگانی و حذف عادت‌ها"
           action={<Btn size="sm" variant="soft" onClick={() => { setEditHabit(null); setShowHabitM(true); }}><Plus size={14} /> عادت جدید</Btn>}
         />
         <div className="px-5 pb-5">
@@ -309,12 +450,22 @@ export default function Settings() {
           ) : (
             <ul className="space-y-1.5">
               {state.habits.map((h) => (
-                <li key={h.id} className="flex items-center gap-2.5 rounded-xl border border-slate-100 px-3 py-2.5 dark:border-white/5">
+                <li key={h.id} className={cx('flex items-center gap-2.5 rounded-xl border border-slate-100 px-3 py-2.5 dark:border-white/5', h.archived && 'opacity-60')}>
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white" style={{ background: h.color }}><Repeat size={16} /></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{h.title}</span>
+                    <span className="flex items-center gap-1.5 truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">
+                      {h.title}
+                      {h.archived && <Badge tone="slate">بایگانی</Badge>}
+                    </span>
                     <span className="tabular block text-[11px] text-slate-400">هدف: {toFa(h.targetPerWeek)} روز در هفته</span>
                   </span>
+                  <button
+                    onClick={() => setHabitArchived(h.id, !h.archived)}
+                    className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-amber-500/10 hover:text-amber-600"
+                    title={h.archived ? 'خارج کردن از بایگانی' : 'بایگانی (مخفی از ردیاب روزانه)'}
+                  >
+                    {h.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                  </button>
                   <button onClick={() => { setEditHabit(h); setShowHabitM(true); }} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-sky-500/10 hover:text-sky-600" title="ویرایش"><Pencil size={14} /></button>
                   <button onClick={() => setConfirmHabit(h.id)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500" title="حذف"><Trash2 size={14} /></button>
                 </li>
@@ -336,8 +487,8 @@ export default function Settings() {
             <Database size={22} />
           </div>
           <div>
-            <h3 className="text-sm font-black text-slate-800 dark:text-white">میزکار زندگی — نسخه ۱٫۰</h3>
-            <p className="mt-0.5 text-[11px] leading-5 text-slate-400">مدیریت یکپارچه مالی، وظایف، تقویم شمسی، عادت‌ها و یادداشت‌ها • ساخته‌شده با ❤️ برای زندگی منظم‌تر</p>
+            <h3 className="text-sm font-black text-slate-800 dark:text-white">میزکار زندگی — نسخه ۲٫۰</h3>
+            <p className="mt-0.5 text-[11px] leading-5 text-slate-400">مدیریت یکپارچه وظایف، تقویم شمسی، عادت‌ها، یادداشت‌ها و مالی (اختیاری) • کاملاً آفلاین • ساخته‌شده با ❤️ برای زندگی منظم‌تر</p>
           </div>
         </div>
       </Card>
@@ -348,7 +499,7 @@ export default function Settings() {
         onClose={() => setConfirmClear(false)}
         onYes={() => { setConfirmClear2(true); setClearTxt(''); }}
         title="پاک کردن همه داده‌ها؟ (مرحله ۱ از ۲)"
-        desc="تراکنش‌ها، وظایف، رویدادها، عادت‌ها، یادداشت‌ها و بازتاب‌ها حذف می‌شوند."
+        desc="تراکنش‌ها، وظایف، رویدادها، عادت‌ها، یادداشت‌ها و بازتاب‌ها حذف می‌شوند. (پشتیبان‌های خودکار باقی می‌مانند)"
       />
       {/* تأیید دو مرحله‌ای پاک‌سازی */}
       {confirmClear2 && (
@@ -372,6 +523,69 @@ export default function Settings() {
           </div>
         </div>
       )}
+
+      {/* پیش‌نمایش ایمپورت */}
+      <Modal open={preview != null} onClose={() => setPreview(null)} title="تأیید بازیابی" sub="محتوای فایل پشتیبان — با تأیید، جایگزین داده‌های فعلی می‌شود">
+        {preview && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { l: 'تراکنش', v: preview.transactions.length },
+                { l: 'وظیفه', v: preview.tasks.length },
+                { l: 'رویداد', v: preview.events.length },
+                { l: 'عادت', v: preview.habits.length },
+                { l: 'یادداشت', v: preview.notes.length },
+                { l: 'بازتاب', v: (preview.reflections ?? []).length },
+                { l: 'بودجه', v: preview.budgets.length },
+              ].map((c) => (
+                <span key={c.l} className="tabular rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:bg-white/10 dark:text-slate-200">
+                  {c.l}: {toFa(c.v)}
+                </span>
+              ))}
+            </div>
+            <p className="rounded-2xl bg-amber-500/5 px-3.5 py-2.5 text-[11px] leading-5 text-amber-700 ring-1 ring-amber-500/15 dark:text-amber-300">
+              ⚠️ داده‌های فعلی شما جایگزین می‌شود. اگر مطمئن نیستید، اول از داده‌های فعلی «دانلود پشتیبان» بگیرید.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Btn variant="ghost" onClick={() => setPreview(null)}>انصراف</Btn>
+              <Btn onClick={confirmImport}><Check size={15} /> تأیید و بازیابی</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* درج JSON متنی */}
+      <Modal open={pasteOpen} onClose={() => setPasteOpen(false)} title="بازیابی از متن JSON" sub="متن فایل پشتیبان را اینجا بچسبانید (مثلاً از تلگرام یا ایمیل)">
+        <div className="space-y-3">
+          <textarea
+            value={pasteTxt}
+            onChange={(e) => { setPasteTxt(e.target.value); setPasteErr(''); }}
+            rows={8}
+            dir="ltr"
+            placeholder='{"version": 1, ...}'
+            className={cx(inputCls, 'h-auto py-3 font-mono text-[11px] leading-5')}
+          />
+          {pasteErr && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{pasteErr}</p>}
+          <div className="flex justify-end gap-2">
+            <Btn variant="ghost" onClick={() => setPasteOpen(false)}>انصراف</Btn>
+            <Btn onClick={handlePaste}><ClipboardPaste size={15} /> بررسی و ادامه</Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {/* بازیابی اسنپ‌شات خودکار */}
+      <Confirm
+        open={pendingAuto != null}
+        onClose={() => setPendingAuto(null)}
+        onYes={() => {
+          if (pendingAuto == null) return;
+          const ok = restoreAutoBackup(pendingAuto);
+          flash(ok, ok ? 'نسخه خودکار بازیابی شد ✅' : 'بازیابی انجام نشد');
+          if (ok) setNameLocal(state.profile.name);
+        }}
+        title="بازیابی نسخه خودکار؟"
+        desc={pendingAuto != null ? `بازگشت به نسخه ${formatJalali(pendingAuto, { weekday: true })} ساعت ${formatTime(pendingAuto)}. داده‌های فعلی جایگزین می‌شوند.` : undefined}
+      />
     </div>
   );
 }

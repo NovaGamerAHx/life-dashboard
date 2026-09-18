@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   ChevronRight, ChevronLeft, Plus, Check, Pencil, Trash2, Clock,
   Flame, MoonStar, Copy, CheckCheck, Sparkles, CalendarPlus, RotateCcw,
-  PartyPopper, ArrowLeft,
+  PartyPopper, ArrowLeft, Target, Hourglass, Wallet, Star, CalendarDays,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../lib/store';
@@ -39,6 +39,13 @@ export default function Today() {
     return Number.isFinite(n) && n > 0 ? startOfDay(n) : realToday;
   })();
   const [day, setDay] = useState<number>(initialDay);
+
+  // سینک با ?day= وقتی از تقویم می‌آییم (کامپوننت دوباره ساخته نمی‌شود)
+  useEffect(() => {
+    const raw = params.get('day');
+    const n = raw != null ? Number(raw) : NaN;
+    if (Number.isFinite(n) && n > 0) setDay(startOfDay(n));
+  }, [params]);
   const [showTaskM, setShowTaskM] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [presetForTomorrow, setPresetForTomorrow] = useState(false);
@@ -95,6 +102,7 @@ export default function Today() {
   const doneCount = dayTasks.filter((t) => t.status === 'done').length;
   const pct = dayTasks.length ? Math.round((doneCount / dayTasks.length) * 100) : 0;
   const remaining = dayTasks.length - doneCount;
+  const activeHabits = useMemo(() => state.habits.filter((h) => !h.archived), [state.habits]);
 
   const reflection: DayReflection | undefined = (state.reflections ?? []).find((r) => r.day === day);
   const dayInfo: DayReflection = reflection ?? {
@@ -156,8 +164,8 @@ export default function Today() {
       lines.push(`⏳ باقی‌مانده:`);
       for (const t of open) lines.push(`  • ${t.title}${t.time ? ` (ساعت ${t.time})` : ''}`);
     }
-    const hd = state.habits.filter((h) => state.habitLogs[`${h.id}:${day}`]);
-    lines.push(`🔥 عادت‌ها: ${hd.length} از ${state.habits.length} انجام شد`);
+    const hd = activeHabits.filter((h) => state.habitLogs[`${h.id}:${day}`]);
+    lines.push(`🔥 عادت‌ها: ${hd.length} از ${activeHabits.length} انجام شد`);
     if (finOn && (dayExp > 0 || dayInc > 0)) lines.push(`💰 هزینه: ${dayExp.toLocaleString('fa-IR')} • درآمد: ${dayInc.toLocaleString('fa-IR')} تومان`);
     if (dayInfo.score != null) lines.push(`⭐ نمره روز: ${dayInfo.score} از ۱۰`);
     if (dayInfo.wake || dayInfo.sleep) lines.push(`😴 خواب: ${dayInfo.wake ? `بیداری ${dayInfo.wake}` : ''}${dayInfo.wake && dayInfo.sleep ? ' • ' : ''}${dayInfo.sleep ? `خواب ${dayInfo.sleep}` : ''}`);
@@ -214,14 +222,14 @@ export default function Today() {
       </Card>
 
       {/* ۱. اطلاعات پایه روز */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <DayInfo label="پیشرفت تسک‌ها" value={`${toFa(pct)}٪`} sub={`${toFa(doneCount)} از ${toFa(dayTasks.length)} انجام شد`} c="from-emerald-500 to-teal-600" />
-        <DayInfo label="باقی‌مانده" value={`${toFa(remaining)} تسک`} sub={remaining === 0 && dayTasks.length > 0 ? 'روزت کامل شد! 🎉' : 'ادامه بده 💪'} c="from-sky-500 to-blue-600" />
+      <div className={cx('grid grid-cols-2 gap-3', finOn ? 'md:grid-cols-3 xl:grid-cols-5' : 'md:grid-cols-4')}>
+        <DayInfo icon={<Target size={17} />} label="پیشرفت تسک‌ها" value={`${toFa(pct)}٪`} sub={`${toFa(doneCount)} از ${toFa(dayTasks.length)} انجام شد`} c="from-emerald-500 to-teal-600" />
+        <DayInfo icon={<Hourglass size={17} />} label="باقی‌مانده" value={`${toFa(remaining)} تسک`} sub={remaining === 0 && dayTasks.length > 0 ? 'روزت کامل شد! 🎉' : 'ادامه بده 💪'} c="from-sky-500 to-blue-600" />
         {finOn && (
-          <DayInfo label="هزینه امروز" value={withUnit(dayExp)} sub={`${toFa(dayTx.filter((t) => t.type === 'expense').length)} تراکنش`} c="from-rose-500 to-pink-600" />
+          <DayInfo icon={<Wallet size={17} />} label="هزینه امروز" value={withUnit(dayExp)} sub={`${toFa(dayTx.filter((t) => t.type === 'expense').length)} تراکنش`} c="from-rose-500 to-pink-600" />
         )}
-        <DayInfo label="نمره روز" value={dayInfo.score != null ? `${toFa(dayInfo.score)} از ۱۰` : 'ثبت نشده'} sub={dayInfo.sport ? `🏃 ورزش${dayInfo.sportType ? `: ${dayInfo.sportType}` : ''}` : 'ورزش ثبت نشده'} c="from-amber-500 to-orange-600" />
-        <DayInfo label="رویدادها" value={`${toFa(dayEvents.length)} رویداد`} sub={dayEvents.length ? dayEvents[0].title : 'برنامه‌ای ثبت نشده'} c="from-violet-500 to-purple-600" />
+        <DayInfo icon={<Star size={17} />} label="نمره روز" value={dayInfo.score != null ? `${toFa(dayInfo.score)} از ۱۰` : 'ثبت نشده'} sub={dayInfo.sport ? `🏃 ورزش${dayInfo.sportType ? `: ${dayInfo.sportType}` : ''}` : 'ورزش ثبت نشده'} c="from-amber-500 to-orange-600" />
+        <DayInfo icon={<CalendarDays size={17} />} label="رویدادها" value={`${toFa(dayEvents.length)} رویداد`} sub={dayEvents.length ? dayEvents[0].title : 'برنامه‌ای ثبت نشده'} c="from-violet-500 to-purple-600" />
       </div>
 
       {/* اطلاعات پایه روز (فرم فشرده اینلاین) */}
@@ -326,7 +334,7 @@ export default function Today() {
                           ))}
                         </p>
                       </div>
-                      <span className="flex shrink-0 gap-0.5 opacity-0 transition group-hover:opacity-100">
+                      <span className="flex shrink-0 gap-0.5 transition sm:opacity-0 sm:group-hover:opacity-100">
                         <button onClick={() => { setEditTask(t); setPresetForTomorrow(false); setShowTaskM(true); }} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-sky-500/10 hover:text-sky-600" title="ویرایش کامل"><Pencil size={13} /></button>
                         <button onClick={() => setConfirmId(t.id)} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500" title="حذف"><Trash2 size={13} /></button>
                       </span>
@@ -416,8 +424,8 @@ export default function Today() {
           <Card>
             <CardHead title="ردیاب عادت‌ها" sub={isToday ? 'امروز را ثبت کن' : formatJalali(day)} action={<Link to="/habits" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">همه <ArrowLeft size={13} /></Link>} />
             <div className="space-y-2 px-5 pb-5">
-              {state.habits.length === 0 && <p className="rounded-2xl bg-slate-50 py-4 text-center text-xs text-slate-400 dark:bg-white/5">عادتی نداری — از بخش عادت‌ها بساز</p>}
-              {state.habits.map((h) => {
+              {activeHabits.length === 0 && <p className="rounded-2xl bg-slate-50 py-4 text-center text-xs text-slate-400 dark:bg-white/5">عادت فعالی نداری — از بخش عادت‌ها بساز</p>}
+              {activeHabits.map((h) => {
                 const done = !!state.habitLogs[`${h.id}:${day}`];
                 const streak = habitStreak(h.id, state.habitLogs);
                 return (
@@ -464,11 +472,11 @@ export default function Today() {
   );
 }
 
-function DayInfo({ label, value, sub, c }: { label: string; value: string; sub: string; c: string }) {
+function DayInfo({ icon, label, value, sub, c }: { icon: React.ReactNode; label: string; value: string; sub: string; c: string }) {
   return (
     <Card className="p-4">
-      <span className={cx('mb-2 grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br text-sm font-black text-white', c)}>
-        {value.slice(0, 2)}
+      <span className={cx('mb-2 grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br text-white', c)}>
+        {icon}
       </span>
       <p className="text-[11px] font-bold text-slate-400">{label}</p>
       <p className="tabular mt-0.5 truncate text-[15px] font-black text-slate-800 dark:text-white">{value}</p>

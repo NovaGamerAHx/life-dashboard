@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Plus, Flame, Pencil, Trash2, Trophy, Target, CalendarCheck2, Sparkles,
+  Archive, ArchiveRestore, ChevronDown,
 } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { Card, CardHead, Btn, Empty, Progress, Confirm } from '../components/ui';
@@ -15,11 +16,15 @@ import {
 import { habitStreak, habitWeekCount, habitTotalCount } from '../lib/stats';
 
 export default function Habits() {
-  const { state, toggleHabit, deleteHabit } = useApp();
+  const { state, toggleHabit, deleteHabit, setHabitArchived } = useApp();
   const [showM, setShowM] = useState(false);
   const [edit, setEdit] = useState<Habit | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const today = todayStart();
+
+  const activeHabits = useMemo(() => state.habits.filter((h) => !h.archived), [state.habits]);
+  const archivedHabits = useMemo(() => state.habits.filter((h) => h.archived), [state.habits]);
 
   // ۷ روز اخیر برای هیت‌مپ (شنبه تا امروز)
   const weekDays = useMemo(() => {
@@ -29,21 +34,21 @@ export default function Habits() {
   }, [today]);
 
   const stats = useMemo(() => {
-    const doneToday = state.habits.filter((h) => state.habitLogs[`${h.id}:${today}`]).length;
+    const doneToday = activeHabits.filter((h) => state.habitLogs[`${h.id}:${today}`]).length;
     const totalChecks = Object.values(state.habitLogs).filter(Boolean).length;
-    const best = state.habits.reduce((a, h) => Math.max(a, habitStreak(h.id, state.habitLogs)), 0);
-    return { doneToday, total: state.habits.length, totalChecks, best };
-  }, [state.habits, state.habitLogs, today]);
+    const best = activeHabits.reduce((a, h) => Math.max(a, habitStreak(h.id, state.habitLogs)), 0);
+    return { doneToday, total: activeHabits.length, totalChecks, best };
+  }, [activeHabits, state.habitLogs, today]);
 
   const sorted = useMemo(() => {
-    return [...state.habits].sort((a, b) => {
+    return [...activeHabits].sort((a, b) => {
       const sa = habitStreak(a.id, state.habitLogs);
       const sb = habitStreak(b.id, state.habitLogs);
       const da = state.habitLogs[`${a.id}:${today}`] ? 0 : 1;
       const db = state.habitLogs[`${b.id}:${today}`] ? 0 : 1;
       return da - db || sb - sa;
     });
-  }, [state.habits, state.habitLogs, today]);
+  }, [activeHabits, state.habitLogs, today]);
 
   // هیت‌مپ ۵ هفته اخیر
   const heatmap = useMemo(() => {
@@ -62,9 +67,9 @@ export default function Habits() {
   }, [today]);
 
   const heatVal = (day: number) => {
-    if (state.habits.length === 0) return 0;
-    const done = state.habits.filter((h) => state.habitLogs[`${h.id}:${day}`]).length;
-    return done / state.habits.length;
+    if (activeHabits.length === 0) return 0;
+    const done = activeHabits.filter((h) => state.habitLogs[`${h.id}:${day}`]).length;
+    return done / activeHabits.length;
   };
 
   return (
@@ -74,7 +79,7 @@ export default function Habits() {
         <MiniStat icon={<CalendarCheck2 size={18} />} label="انجام‌شده امروز" value={`${toFa(stats.doneToday)} از ${toFa(stats.total)}`} color="from-emerald-500 to-teal-600" />
         <MiniStat icon={<Flame size={18} />} label="بهترین استریک" value={`${toFa(stats.best)} روز`} color="from-orange-500 to-rose-500" />
         <MiniStat icon={<Target size={18} />} label="کل تیک‌ها" value={`${toFa(stats.totalChecks)} بار`} color="from-sky-500 to-blue-600" />
-        <MiniStat icon={<Trophy size={18} />} label="نرخ موفقیت هفته" value={`${toFa(weekRate(state.habitLogs, state.habits))}٪`} color="from-violet-500 to-purple-600" />
+        <MiniStat icon={<Trophy size={18} />} label="نرخ موفقیت هفته" value={`${toFa(weekRate(state.habitLogs, activeHabits))}٪`} color="from-violet-500 to-purple-600" />
       </div>
 
       <Card>
@@ -83,12 +88,12 @@ export default function Habits() {
           sub="هر روز با یک کلیک ثبت کن — زنجیره را نشکن!"
           action={<Btn onClick={() => { setEdit(null); setShowM(true); }}><Plus size={15} /> عادت جدید</Btn>}
         />
-        {state.habits.length === 0 ? (
+        {activeHabits.length === 0 ? (
           <Empty
             icon={<Flame size={26} />}
-            title="هنوز عادتی نساخته‌ای"
+            title="عادت فعالی نداری"
             sub="با یک عادت کوچک و آسان شروع کن؛ مثلاً «روزی یک لیوان آب بیشتر»"
-            action={<Btn onClick={() => { setEdit(null); setShowM(true); }}><Plus size={15} /> ساخت اولین عادت</Btn>}
+            action={<Btn onClick={() => { setEdit(null); setShowM(true); }}><Plus size={15} /> ساخت عادت</Btn>}
           />
         ) : (
           <div className="space-y-3 px-5 pb-5">
@@ -101,14 +106,55 @@ export default function Habits() {
                 onToggle={(d) => toggleHabit(h.id, d)}
                 onEdit={() => { setEdit(h); setShowM(true); }}
                 onDelete={() => setConfirmId(h.id)}
+                onArchive={() => setHabitArchived(h.id, true)}
               />
             ))}
           </div>
         )}
       </Card>
 
+      {/* بایگانی‌شده‌ها */}
+      {archivedHabits.length > 0 && (
+        <Card>
+          <button onClick={() => setShowArchived((v) => !v)} className="flex w-full items-center gap-2 px-5 py-4 text-right">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300">
+              <Archive size={17} />
+            </span>
+            <span className="flex-1">
+              <span className="block text-[13px] font-black text-slate-700 dark:text-slate-200">
+                عادت‌های بایگانی‌شده ({toFa(archivedHabits.length)})
+              </span>
+              <span className="block text-[11px] text-slate-400">مخفی از ردیاب روزانه — سوابقشان حفظ شده است</span>
+            </span>
+            <motion.span animate={{ rotate: showArchived ? 180 : 0 }} className="text-slate-400">
+              <ChevronDown size={18} />
+            </motion.span>
+          </button>
+          {showArchived && (
+            <ul className="space-y-1.5 px-5 pb-5">
+              {archivedHabits.map((h) => (
+                <li key={h.id} className="flex items-center gap-2.5 rounded-xl border border-slate-100 px-3 py-2.5 opacity-70 dark:border-white/5">
+                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: h.color }} />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-slate-600 dark:text-slate-300">{h.title}</span>
+                  <button
+                    onClick={() => setHabitArchived(h.id, false)}
+                    className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-emerald-600 transition hover:bg-emerald-500/10"
+                    title="بازگرداندن به عادت‌های فعال"
+                  >
+                    <ArchiveRestore size={13} /> بازگردانی
+                  </button>
+                  <button onClick={() => setConfirmId(h.id)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500" title="حذف کامل">
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
       {/* هیت‌مپ */}
-      {state.habits.length > 0 && (
+      {activeHabits.length > 0 && (
         <Card>
           <CardHead title="نقشه حرارتی ۵ هفته اخیر" sub="هرچه پررنگ‌تر، روز پربارتر" />
           <div className="overflow-x-auto px-5 pb-5">
@@ -200,7 +246,7 @@ function MiniStat({ icon, label, value, color }: { icon: React.ReactNode; label:
 }
 
 function HabitRow({
-  h, index, weekDays, onToggle, onEdit, onDelete,
+  h, index, weekDays, onToggle, onEdit, onDelete, onArchive,
 }: {
   h: Habit;
   index: number;
@@ -208,6 +254,7 @@ function HabitRow({
   onToggle: (d: number) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onArchive: () => void;
 }) {
   const { state } = useApp();
   const today = todayStart();
@@ -248,9 +295,10 @@ function HabitRow({
             <span>• مجموع {toFa(total)} بار</span>
           </p>
         </div>
-        <span className="flex shrink-0 gap-0.5 opacity-0 transition group-hover:opacity-100">
-          <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-sky-500/10 hover:text-sky-600"><Pencil size={14} /></button>
-          <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500"><Trash2 size={14} /></button>
+        <span className="flex shrink-0 gap-0.5 transition sm:opacity-0 sm:group-hover:opacity-100">
+          <button onClick={onArchive} title="بایگانی (مخفی از ردیاب روزانه، بدون حذف سوابق)" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-amber-500/10 hover:text-amber-600"><Archive size={14} /></button>
+          <button onClick={onEdit} title="ویرایش" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-sky-500/10 hover:text-sky-600"><Pencil size={14} /></button>
+          <button onClick={onDelete} title="حذف" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500"><Trash2 size={14} /></button>
         </span>
       </div>
       <div className="mt-3 flex items-center gap-2">
@@ -258,8 +306,6 @@ function HabitRow({
           {weekDays.map((d) => {
             const done = !!state.habitLogs[`${h.id}:${d}`];
             const isToday = d === today;
-            const future = d > today;
-            void future;
             const jj = toJalaali(new Date(d));
             return (
               <button

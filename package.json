@@ -1,7 +1,7 @@
 {
-  "name": "life-desk",
+  "name": "mizkar-zendegi",
   "private": true,
-  "version": "2.0.0",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -31,5 +31,6 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
     "vite": "^7.3.1"
-  }
+  },
+  "description": "میزکار زندگی — وب‌اپ شخصی فارسی، کاملاً آفلاین: وظایف، تقویم شمسی، عادت‌ها، یادداشت‌ها و نمره‌گذاری روزانه"
 }

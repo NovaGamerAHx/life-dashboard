@@ -6,36 +6,13 @@ export function uid(prefix = 'id'): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-const FA_MAP: Record<string, string> = {
-  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
-  '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
-  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
-  '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
-  '٬': '', '،': '', ',': '', ' ': '', ' ': '',
-};
-
-/** متن مبلغ (با ارقام فارسی/عربی و جداکننده) را به عدد صحیح تومان تبدیل می‌کند */
-export function parseAmount(raw: string): number {
-  if (!raw) return 0;
-  let s = String(raw);
-  for (const [fa, en] of Object.entries(FA_MAP)) s = s.split(fa).join(en);
-  s = s.replace(/[^0-9]/g, '');
-  if (!s) return 0;
-  const n = Number(s);
-  return Number.isSafeInteger(n) ? n : 0;
-}
-
-export function formatMoney(amount: number, unit: 'toman' | 'heazar' = 'toman'): string {
-  const v = unit === 'heazar' ? Math.round(amount / 1000) : Math.round(amount);
-  return new Intl.NumberFormat('fa-IR').format(v);
-}
-
-export function moneyUnitLabel(unit: 'toman' | 'heazar'): string {
-  return unit === 'heazar' ? 'هزار تومان' : 'تومان';
-}
-
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
+}
+
+/** گرد کردن به یک رقم اعشار (برای نمره‌های روز) */
+export function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }
 
 export function downloadJson(filename: string, data: unknown): void {
@@ -65,7 +42,7 @@ export function readJsonFile(file: File): Promise<unknown> {
   });
 }
 
-/** تولید اعداد شبه‌تصادفی پایدار برای داده نمایشی */
+/** تولید اعداد شبه‌تصادفی پایدار برای داده نمایشی و انتخاب روزها */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -75,4 +52,41 @@ export function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/** انتخاب تصادفی n عضو از یک آرایه (بدون تکرار، ترتیب تصادفی) */
+export function sampleRandom<T>(items: T[], n: number): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, Math.max(0, Math.min(n, arr.length)));
+}
+
+/** کپی متن در کلیپ‌بورد با پشتیبانی از مرورگرهای قدیمی‌تر */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* سراغ روش جایگزین می‌رویم */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }

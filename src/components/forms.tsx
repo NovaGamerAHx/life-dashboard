@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Plus, Trash2, Check, Eraser } from 'lucide-react';
-import { Modal, Field, Btn, inputCls, Segmented } from './ui';
-import { cx, parseAmount, uid } from '../lib/utils';
+import { Modal, Field, Btn, inputCls, Segmented, TimeField } from './ui';
+import { cx, uid } from '../lib/utils';
 import {
   toJalaali, toGregorian, jalaaliMonthLength, J_MONTHS, toFa,
-  formatJalali, todayStart, startOfDay,
+  formatJalali, todayStart, startOfDay, normalizeClockText,
 } from '../lib/jalali';
 import { useApp } from '../lib/store';
-import { EVENT_COLORS, HABIT_COLORS, NOTE_COLORS, PRIORITY_META, type CalEvent, type Habit, type Note, type Task, type TaskPriority, type TaskStatus, type Transaction } from '../lib/types';
+import { EVENT_COLORS, HABIT_COLORS, NOTE_COLORS, PRIORITY_META, type CalEvent, type Habit, type Note, type Task, type TaskPriority, type TaskStatus } from '../lib/types';
 
 /** نام ربع ماتریس آیزنهاور */
 export function eisenLabel(important: boolean, urgent: boolean): string {
@@ -119,29 +119,6 @@ export function JalaliDateField({
   );
 }
 
-// ── فیلد مبلغ ───────────────────────────────────────────────
-export function AmountField({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const [txt, setTxt] = useState(value ? value.toLocaleString('en-US').replace(/,/g, '٬') : '');
-  useEffect(() => {
-    setTxt(value ? value.toLocaleString('en-US').replace(/,/g, '٬') : '');
-  }, [value]);
-  return (
-    <div className="relative">
-      <input
-        inputMode="numeric"
-        value={txt}
-        onChange={(e) => {
-          setTxt(e.target.value);
-          onChange(parseAmount(e.target.value));
-        }}
-        placeholder="مثلاً ۲۵۰٬۰۰۰"
-        className={cx(inputCls, 'tabular pl-14 text-base font-black')}
-      />
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400">تومان</span>
-    </div>
-  );
-}
-
 export function ColorDots({ colors, value, onChange }: { colors: string[]; value: string; onChange: (c: string) => void }) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -150,9 +127,10 @@ export function ColorDots({ colors, value, onChange }: { colors: string[]; value
           key={c}
           type="button"
           onClick={() => onChange(c)}
+          aria-label={`رنگ ${c}`}
           className={cx(
             'grid h-9 w-9 place-items-center rounded-full transition-all',
-            value === c ? 'scale-110 ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-slate-900' : 'hover:scale-105 opacity-80',
+            value === c ? 'scale-110 ring-2 ring-slate-400 ring-offset-2 dark:ring-offset-slate-900' : 'opacity-80 hover:scale-105',
           )}
           style={{ background: c }}
         >
@@ -160,106 +138,6 @@ export function ColorDots({ colors, value, onChange }: { colors: string[]; value
         </button>
       ))}
     </div>
-  );
-}
-
-// ── مودال تراکنش ────────────────────────────────────────────
-export function TxModal({
-  open, onClose, edit,
-}: {
-  open: boolean; onClose: () => void; edit?: Transaction | null;
-}) {
-  const { state, addTransaction, updateTransaction } = useApp();
-  const [type, setType] = useState<'income' | 'expense'>(edit?.type ?? 'expense');
-  const [amount, setAmount] = useState(edit?.amount ?? 0);
-  const [title, setTitle] = useState(edit?.title ?? '');
-  const [cat, setCat] = useState(edit?.category ?? '');
-  const [date, setDate] = useState<number>(edit?.date ?? Date.now());
-  const [time, setTime] = useState(() => {
-    if (edit) { const d = new Date(edit.date); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
-    return '12:00';
-  });
-  const [note, setNote] = useState(edit?.note ?? '');
-  const [err, setErr] = useState('');
-
-  useEffect(() => {
-    if (open) {
-      setType(edit?.type ?? 'expense');
-      setAmount(edit?.amount ?? 0);
-      setTitle(edit?.title ?? '');
-      setCat(edit?.category ?? '');
-      setDate(edit?.date ?? Date.now());
-      setNote(edit?.note ?? '');
-      setErr('');
-      if (edit) {
-        const d = new Date(edit.date);
-        setTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
-      } else setTime('12:00');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const cats = type === 'expense' ? state.expenseCats : state.incomeCats;
-
-  const save = () => {
-    if (!title.trim()) { setErr('عنوان تراکنش را بنویسید'); return; }
-    if (!amount || amount <= 0) { setErr('مبلغ معتبر وارد کنید'); return; }
-    if (!cat) { setErr('دسته‌بندی را انتخاب کنید'); return; }
-    const d = new Date(date);
-    const [h, m] = time.split(':').map(Number);
-    if (!Number.isNaN(h) && !Number.isNaN(m)) d.setHours(h, m, 0, 0);
-    const payload = {
-      type, amount: Math.round(amount), title: title.trim(),
-      category: cat, date: d.getTime(), note: note.trim() || undefined,
-    };
-    if (edit) updateTransaction(edit.id, payload);
-    else addTransaction(payload);
-    onClose();
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title={edit ? 'ویرایش تراکنش' : 'تراکنش جدید'} sub="درآمد یا هزینه را دقیق ثبت کنید">
-      <div className="space-y-4">
-        <div className="flex justify-center">
-          <Segmented
-            value={type}
-            onChange={(v) => { setType(v); setCat(''); }}
-            options={[
-              { v: 'expense', label: 'هزینه' },
-              { v: 'income', label: 'درآمد' },
-            ]}
-          />
-        </div>
-        <Field label="مبلغ">
-          <AmountField value={amount} onChange={setAmount} />
-        </Field>
-        <Field label="عنوان">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={type === 'expense' ? 'مثلاً خرید سوپرمارکت' : 'مثلاً حقوق ماهانه'} className={inputCls} />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="دسته‌بندی">
-            <select value={cat} onChange={(e) => setCat(e.target.value)} className={inputCls}>
-              <option value="">انتخاب…</option>
-              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </Field>
-          <Field label="ساعت">
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={cx(inputCls, 'tabular')} dir="ltr" />
-          </Field>
-        </div>
-        <Field label="تاریخ">
-          <JalaliDateField value={startOfDay(date)} onChange={(v) => v != null && setDate(new Date(v).setHours(12, 0, 0, 0))} allowClear={false} />
-        </Field>
-        <Field label="یادداشت (اختیاری)">
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className={cx(inputCls, 'h-auto py-2.5')} placeholder="توضیح کوتاه…" />
-        </Field>
-        {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
-        <div className="flex justify-end gap-2 pt-1">
-          <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
-          <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'ثبت تراکنش'}</Btn>
-        </div>
-      </div>
-    </Modal>
   );
 }
 
@@ -312,7 +190,8 @@ export function TaskModal({
 
   const save = () => {
     if (!title.trim()) { setErr('عنوان وظیفه را بنویسید'); return; }
-    if (time && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(time.trim())) { setErr('ساعت معتبر نیست (مثل ۱۴:۳۰)'); return; }
+    const timeNorm = time.trim() ? normalizeClockText(time) : null;
+    if (time.trim() && !timeNorm) { setErr('ساعت را ۲۴ساعته و به شکل ۰۹:۳۰ یا ۲۲:۱۵ بنویسید'); return; }
     const tags = tagsTxt.split(/[،,]/).map((t) => t.trim()).filter(Boolean).slice(0, 8);
     const actual = actualTxt.trim() === '' ? undefined : Math.min(10080, Math.max(1, Number(actualTxt.replace(/[^0-9]/g, '')) || 0)) || undefined;
     const payload = {
@@ -321,7 +200,7 @@ export function TaskModal({
       backlog,
       urgent,
       deadline,
-      time: time.trim() || undefined,
+      time: timeNorm ?? undefined,
       durationMin: Math.min(1440, Math.max(5, durationMin || 60)),
       actualMin: actual,
       result: result.trim() || undefined,
@@ -379,8 +258,8 @@ export function TaskModal({
           <JalaliDateField value={due} onChange={setDue} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="ساعت شروع (اختیاری — برای تایم‌لاین)">
-            <input value={time} onChange={(e) => setTime(e.target.value)} placeholder="۰۹:۳۰" dir="ltr" className={cx(inputCls, 'tabular text-center')} />
+          <Field label="ساعت شروع (اختیاری — ۲۴ساعته)" hint="برای تایم‌لاین روز استفاده می‌شود">
+            <TimeField value={time} onChange={setTime} ariaLabel="ساعت شروع وظیفه" />
           </Field>
           <Field label="مدت برنامه‌ریزی‌شده (دقیقه)">
             <input
@@ -516,9 +395,10 @@ export function EventModal({ open, onClose, edit, presetDay }: { open: boolean; 
   const save = () => {
     if (!title.trim()) { setErr('عنوان رویداد را بنویسید'); return; }
     if (day == null) { setErr('روز رویداد را انتخاب کنید'); return; }
-    if (time && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(time)) { setErr('ساعت معتبر نیست (مثل ۱۴:۳۰)'); return; }
-    if (edit) updateEvent(edit.id, { title: title.trim(), day, time, color, desc: desc.trim() || undefined });
-    else addEvent({ title: title.trim(), day, time, color, desc: desc.trim() || undefined });
+    const timeNorm = time.trim() ? (normalizeClockText(time) ?? '') : '';
+    if (time.trim() && !timeNorm) { setErr('ساعت را ۲۴ساعته و به شکل ۱۰:۰۰ یا ۱۸:۳۰ بنویسید'); return; }
+    if (edit) updateEvent(edit.id, { title: title.trim(), day, time: timeNorm, color, desc: desc.trim() || undefined });
+    else addEvent({ title: title.trim(), day, time: timeNorm, color, desc: desc.trim() || undefined });
     onClose();
   };
 
@@ -532,8 +412,8 @@ export function EventModal({ open, onClose, edit, presetDay }: { open: boolean; 
           <JalaliDateField value={day} onChange={setDay} allowClear={false} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="ساعت (اختیاری)">
-            <input value={time} onChange={(e) => setTime(e.target.value)} placeholder="۱۰:۰۰" dir="ltr" className={cx(inputCls, 'tabular text-center')} />
+          <Field label="ساعت (اختیاری — ۲۴ساعته)">
+            <TimeField value={time} onChange={setTime} ariaLabel="ساعت رویداد" placeholder="۱۸:۳۰" />
           </Field>
           <Field label="یادداشت">
             <input value={desc} onChange={(e) => setDesc(e.target.value)} className={inputCls} placeholder="مکان یا توضیح…" />

@@ -1,21 +1,21 @@
 import { useRef, useState } from 'react';
 import {
-  User, Palette, Coins, Database, Download, Upload, RefreshCw,
+  User, Palette, Database, Download, Upload, RefreshCw,
   Trash2, ShieldCheck, Moon, Sun, Monitor, Check, Tags, Repeat, Plus, Pencil, BellRing,
   CalendarDays, History, HardDrive, ClipboardPaste, Archive, ArchiveRestore, FileUp,
 } from 'lucide-react';
 import { useApp, validateBackup } from '../lib/store';
-import type { AppState, MoneyUnit, ThemeMode } from '../lib/types';
+import type { AppState, ThemeMode } from '../lib/types';
 import { TASK_CAT_COLORS, type Habit } from '../lib/types';
-import { Card, CardHead, Btn, Field, inputCls, Confirm, Segmented, Modal, Progress, Badge } from '../components/ui';
+import { Card, CardHead, Btn, Field, inputCls, Confirm, Segmented, Modal, Progress, Badge, TimeField } from '../components/ui';
 import { ColorDots, HabitModal } from '../components/forms';
 import { downloadJson, readJsonFile, cx } from '../lib/utils';
-import { toFa, formatJalali, formatTime } from '../lib/jalali';
+import { toFa, formatJalali, formatTime, clockToFa } from '../lib/jalali';
 import { formatBytes, backupFilename } from '../lib/backup';
 
 export default function Settings() {
   const {
-    state, setTheme, setUnit, setName, setFinanceEnabled, setWeekStart, setCalSystem,
+    state, setTheme, setName, setWeekStart, setCalSystem,
     setHabitArchived,
     importState, resetDemo, clearAll,
     addTaskCat, updateTaskCat, deleteTaskCat,
@@ -48,12 +48,12 @@ export default function Settings() {
   };
 
   const counts = [
-    { l: 'تراکنش', v: state.transactions.length },
     { l: 'وظیفه', v: state.tasks.length },
     { l: 'رویداد', v: state.events.length },
     { l: 'عادت', v: state.habits.length },
     { l: 'یادداشت', v: state.notes.length },
-    { l: 'بازتاب', v: (state.reflections ?? []).length },
+    { l: 'بازتاب روز', v: (state.reflections ?? []).length },
+    { l: 'روز نمره‌دار', v: (state.reflections ?? []).filter((r) => r.score != null).length },
   ];
 
   const doExport = () => {
@@ -112,11 +112,6 @@ export default function Settings() {
     { v: 'dark', label: 'تیره', icon: <Moon size={16} /> },
     { v: 'system', label: 'خودکار', icon: <Monitor size={16} /> },
   ];
-  const units: Array<{ v: MoneyUnit; label: string; sub: string }> = [
-    { v: 'toman', label: 'تومان', sub: 'نمایش کامل مبلغ' },
-    { v: 'heazar', label: 'هزار تومان', sub: 'خلاصه و جمع‌وجور' },
-  ];
-
   const storagePct = Math.min(100, (storageBytes / (5 * 1024 * 1024)) * 100);
 
   return (
@@ -153,47 +148,6 @@ export default function Settings() {
         </div>
       </Card>
 
-      {/* ماژول‌ها */}
-      <Card>
-        <CardHead title="ماژول‌های برنامه" sub="بخش‌های اختیاری را فعال یا مخفی کنید" />
-        <div className="space-y-2.5 px-5 pb-5">
-          <button
-            onClick={() => setFinanceEnabled(!state.settings.financeEnabled)}
-            className={cx(
-              'flex w-full items-center gap-3 rounded-2xl border-2 p-3.5 text-right transition',
-              state.settings.financeEnabled
-                ? 'border-emerald-500 bg-emerald-500/5'
-                : 'border-slate-100 hover:border-slate-200 dark:border-white/5',
-            )}
-          >
-            <span className={cx(
-              'grid h-10 w-10 shrink-0 place-items-center rounded-xl',
-              state.settings.financeEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 dark:bg-white/10',
-            )}>
-              <Coins size={18} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-black text-slate-700 dark:text-slate-100">ماژول مالی 💰</span>
-              <span className="block text-[11px] text-slate-400">تراکنش‌ها، بودجه‌ها، صفحه مالی و بخش‌های مالی داشبورد و گزارش‌ها</span>
-            </span>
-            <span className={cx(
-              'relative h-6 w-11 shrink-0 rounded-full transition',
-              state.settings.financeEnabled ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-white/15',
-            )}>
-              <span className={cx(
-                'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all',
-                state.settings.financeEnabled ? 'right-0.5' : 'right-[22px]',
-              )} />
-            </span>
-          </button>
-          {!state.settings.financeEnabled && state.transactions.length + state.budgets.length > 0 && (
-            <p className="rounded-2xl bg-amber-500/5 px-3.5 py-2.5 text-[11px] leading-5 text-amber-700 ring-1 ring-amber-500/15 dark:text-amber-300">
-              {toFa(state.transactions.length)} تراکنش و {toFa(state.budgets.length)} بودجه ذخیره شده‌اند ولی مخفی‌اند — با فعال‌سازی دوباره نمایش داده می‌شوند (داده‌ای پاک نمی‌شود).
-            </p>
-          )}
-        </div>
-      </Card>
-
       {/* ظاهر */}
       <Card>
         <CardHead title="ظاهر" sub="تم روشن، تیره یا هماهنگ با سیستم" />
@@ -215,43 +169,6 @@ export default function Settings() {
           ))}
         </div>
       </Card>
-
-      {/* واحد پول */}
-      {state.settings.financeEnabled && (
-        <Card>
-          <CardHead title="واحد نمایش پول" sub="در همه بخش‌ها اعمال می‌شود" />
-          <div className="grid gap-2 px-5 pb-5 sm:grid-cols-2">
-            {units.map((u) => (
-              <button
-                key={u.v}
-                onClick={() => setUnit(u.v)}
-                className={cx(
-                  'flex items-center gap-3 rounded-2xl border-2 p-3.5 text-right transition',
-                  state.settings.unit === u.v
-                    ? 'border-emerald-500 bg-emerald-500/5'
-                    : 'border-slate-100 hover:border-slate-200 dark:border-white/5',
-                )}
-              >
-                <span className={cx(
-                  'grid h-10 w-10 shrink-0 place-items-center rounded-xl',
-                  state.settings.unit === u.v ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 dark:bg-white/10',
-                )}>
-                  <Coins size={18} />
-                </span>
-                <span>
-                  <span className="block text-[13px] font-black text-slate-700 dark:text-slate-100">{u.label}</span>
-                  <span className="block text-[11px] text-slate-400">{u.sub}</span>
-                </span>
-                {state.settings.unit === u.v && <Check size={16} className="mr-auto text-emerald-500" />}
-              </button>
-            ))}
-          </div>
-          <div className="mx-5 mb-5 flex items-center gap-2 rounded-2xl bg-slate-50 px-3.5 py-3 text-[11px] text-slate-500 dark:bg-white/5 dark:text-slate-400">
-            <Palette size={15} className="shrink-0 text-slate-400" />
-            مثال: ۱۲٬۵۰۰٬۰۰۰ {state.settings.unit === 'heazar' ? '← «۱۲٬۵۰۰ هزار تومان» نمایش داده می‌شود' : '← «۱۲٬۵۰۰٬۰۰۰ تومان» نمایش داده می‌شود'}
-          </div>
-        </Card>
-      )}
 
       {/* تقویم */}
       <Card>
@@ -364,8 +281,7 @@ export default function Settings() {
                       {formatJalali(b.ts, { weekday: true })} • {formatTime(b.ts)}
                     </span>
                     <span className="tabular text-[10px] text-slate-400">
-                      {toFa(b.tasks)} وظیفه • {toFa(b.events)} رویداد • {toFa(b.habits)} عادت • {toFa(b.notes)} یادداشت
-                      {b.tx > 0 && ` • ${toFa(b.tx)} تراکنش`}
+                      {toFa(b.tasks)} وظیفه • {toFa(b.events)} رویداد • {toFa(b.habits)} عادت • {toFa(b.notes)} یادداشت • {toFa(b.reflections)} بازتاب
                     </span>
                     <span className="flex-1" />
                     <Btn size="xs" variant="soft" onClick={() => setPendingAuto(b.ts)}>
@@ -487,8 +403,11 @@ export default function Settings() {
             <Database size={22} />
           </div>
           <div>
-            <h3 className="text-sm font-black text-slate-800 dark:text-white">میزکار زندگی — نسخه ۲٫۰</h3>
-            <p className="mt-0.5 text-[11px] leading-5 text-slate-400">مدیریت یکپارچه وظایف، تقویم شمسی، عادت‌ها، یادداشت‌ها و مالی (اختیاری) • کاملاً آفلاین • ساخته‌شده با ❤️ برای زندگی منظم‌تر</p>
+            <h3 className="text-sm font-black text-slate-800 dark:text-white">میزکار زندگی — نسخه ۳٫۰</h3>
+            <p className="mt-0.5 text-[11px] leading-5 text-slate-400">
+              مدیریت یکپارچه وظایف، تقویم شمسی، عادت‌ها، یادداشت‌ها، نمره‌ها و خلاصه‌های روزانه • تمام ساعت‌ها ۲۴ساعته •
+              کاملاً آفلاین • ساخته‌شده با ❤️ برای زندگی منظم‌تر
+            </p>
           </div>
         </div>
       </Card>
@@ -499,7 +418,7 @@ export default function Settings() {
         onClose={() => setConfirmClear(false)}
         onYes={() => { setConfirmClear2(true); setClearTxt(''); }}
         title="پاک کردن همه داده‌ها؟ (مرحله ۱ از ۲)"
-        desc="تراکنش‌ها، وظایف، رویدادها، عادت‌ها، یادداشت‌ها و بازتاب‌ها حذف می‌شوند. (پشتیبان‌های خودکار باقی می‌مانند)"
+        desc="وظایف، رویدادها، عادت‌ها، یادداشت‌ها و بازتاب‌های روزانه حذف می‌شوند. (پشتیبان‌های خودکار باقی می‌مانند)"
       />
       {/* تأیید دو مرحله‌ای پاک‌سازی */}
       {confirmClear2 && (
@@ -530,13 +449,12 @@ export default function Settings() {
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
               {[
-                { l: 'تراکنش', v: preview.transactions.length },
                 { l: 'وظیفه', v: preview.tasks.length },
                 { l: 'رویداد', v: preview.events.length },
                 { l: 'عادت', v: preview.habits.length },
                 { l: 'یادداشت', v: preview.notes.length },
-                { l: 'بازتاب', v: (preview.reflections ?? []).length },
-                { l: 'بودجه', v: preview.budgets.length },
+                { l: 'بازتاب روز', v: (preview.reflections ?? []).length },
+                { l: 'روز نمره‌دار', v: (preview.reflections ?? []).filter((r) => r.score != null).length },
               ].map((c) => (
                 <span key={c.l} className="tabular rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:bg-white/10 dark:text-slate-200">
                   {c.l}: {toFa(c.v)}
@@ -634,11 +552,11 @@ function ReminderCard() {
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-amber-500/10 text-amber-500"><BellRing size={20} /></span>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-black text-slate-700 dark:text-slate-200">
-            {perm === 'unsupported' ? 'مرورگر شما اعلان پشتیبانی نمی‌کند' : enabled ? `یادآوری فعال — هر شب ساعت ${time}` : 'یادآوری غیرفعال است'}
+            {perm === 'unsupported' ? 'مرورگر شما اعلان پشتیبانی نمی‌کند' : enabled ? `یادآوری فعال — هر شب ساعت ${clockToFa(time)} (۲۴ساعته)` : 'یادآوری غیرفعال است'}
           </p>
           <p className="mt-0.5 text-[11px] text-slate-400">تب برنامه باید باز باشد تا اعلان نمایش داده شود</p>
         </div>
-        <input type="time" value={time} onChange={(e) => changeTime(e.target.value)} dir="ltr" className={cx(inputCls, 'tabular w-auto')} />
+        <TimeField value={time} onChange={changeTime} className="w-28" ariaLabel="ساعت یادآوری" placeholder="۲۲:۰۰" allowEmpty={false} />
         <Segmented value={enabled ? 'on' : 'off'} onChange={(v) => { if ((v === 'on') !== enabled) toggle(); }} options={[{ v: 'off', label: 'خاموش' }, { v: 'on', label: 'روشن' }]} />
       </div>
     </Card>

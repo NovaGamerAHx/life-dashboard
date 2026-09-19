@@ -1,8 +1,7 @@
 import { addDays, startOfDay, toGregorian, todayStart } from './jalali';
 import { mulberry32 } from './utils';
 import {
-  AppState, CalEvent, DEFAULT_EXPENSE_CATS, DEFAULT_INCOME_CATS, DEFAULT_TASK_CATS,
-  Habit, Note, Task, Transaction,
+  AppState, CalEvent, DEFAULT_TASK_CATS, DayReflection, Habit, Note, Task,
 } from './types';
 import { uid } from './utils';
 
@@ -24,78 +23,37 @@ function d(daysOffset: number): number {
   return addDays(todayStart(), daysOffset);
 }
 
+/** ساعت ۲۴ساعته با ارقام لاتین — پایه ذخیره‌سازی همه ساعت‌ها */
+function clk(h: number, m = 0): string {
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 export function seedState(): AppState {
   const now = Date.now();
-  const rnd = mulberry32(20260909);
-
-  // ── تراکنش‌ها: ۶۰ روز گذشته ─────────────────────────────
-  const txs: Transaction[] = [];
-  const expPool: Array<[string, number, number]> = [
-    ['خوراک', 80000, 450000], ['حمل‌ونقل', 30000, 180000], ['قبوض', 150000, 900000],
-    ['سلامت', 200000, 1500000], ['پوشاک', 400000, 2500000], ['تفریح', 150000, 800000],
-    ['آموزش', 300000, 2000000], ['خانه', 250000, 1800000], ['سایر', 50000, 400000],
-  ];
-  const expTitles: Record<string, string[]> = {
-    'خوراک': ['خرید هفتگی سوپرمارکت', 'ناهار رستوران', 'میوه و سبزیجات', 'کافه با دوستان', 'سفارش آنلاین غذا'],
-    'حمل‌ونقل': ['شارژ کارت مترو', 'اسنپ تا محل کار', 'بنزین', 'پارکینگ'],
-    'قبوض': ['قبض برق', 'اینترنت خانگی', 'قبض آب', 'شارژ همراه'],
-    'سلامت': ['ویزیت پزشک', 'داروخانه', 'باشگاه ورزشی', 'آزمایش خون'],
-    'پوشاک': ['کتونی ورزشی', 'پیراهن', 'شلوار جین'],
-    'تفریح': ['سینما', 'کتاب', 'سفر یک‌روزه', 'بازی'],
-    'آموزش': ['دوره آنلاین زبان', 'کارگاه طراحی', 'اشتراک آموزشی'],
-    'خانه': ['تعمیرات لوله‌کشی', 'خرید لوازم خانه', 'نظافت'],
-    'سایر': ['هدیه تولد', 'کمک خیریه', 'متفرقه'],
-  };
-  for (let back = 58; back >= 0; back--) {
-    const n = 1 + Math.floor(rnd() * 3);
-    for (let k = 0; k < n; k++) {
-      const [cat, lo, hi] = expPool[Math.floor(rnd() * expPool.length)];
-      const titles = expTitles[cat];
-      const amt = Math.round((lo + rnd() * (hi - lo)) / 10000) * 10000;
-      txs.push({
-        id: uid('tx'),
-        type: 'expense',
-        amount: amt,
-        category: cat,
-        title: titles[Math.floor(rnd() * titles.length)],
-        date: t(-back, 8 + Math.floor(rnd() * 13), Math.floor(rnd() * 60)),
-        createdAt: now - back * 86400000,
-      });
-    }
-  }
-  // درآمدها
-  txs.push(
-    { id: uid('tx'), type: 'income', amount: 45000000, category: 'حقوق', title: 'حقوق مرداد', date: t(-40, 9), createdAt: now },
-    { id: uid('tx'), type: 'income', amount: 45000000, category: 'حقوق', title: 'حقوق شهریور', date: t(-10, 9), createdAt: now },
-    { id: uid('tx'), type: 'income', amount: 8500000, category: 'فریلنسری', title: 'پروژه طراحی سایت', date: t(-22, 15), createdAt: now },
-    { id: uid('tx'), type: 'income', amount: 5200000, category: 'فریلنسری', title: 'مشاوره سئو', date: t(-6, 17), createdAt: now },
-    { id: uid('tx'), type: 'income', amount: 3100000, category: 'سرمایه‌گذاری', title: 'سود صندوق', date: t(-15, 11), createdAt: now },
-    { id: uid('tx'), type: 'income', amount: 1200000, category: 'سایر', title: 'فروش وسایل دست‌دوم', date: t(-3, 13), createdAt: now },
-  );
 
   // ── وظایف ───────────────────────────────────────────────
   const tasks: Task[] = [
     {
-      id: uid('task'), title: 'تحویل گزارش ماهانه به مدیر', desc: 'شامل نمودار فروش، تحلیل هزینه‌ها و پیشنهادهای فصل بعد',
-      status: 'doing', priority: 'high', tags: ['کاری', 'مهم'], due: d(0), backlog: false, time: '09:00', durationMin: 120,
+      id: uid('task'), title: 'تحویل گزارش ماهانه به مدیر', desc: 'شامل نمودار پیشرفت، جمع‌بندی کارها و پیشنهادهای ماه بعد',
+      status: 'doing', priority: 'high', tags: ['کاری', 'مهم'], due: d(0), backlog: false, time: clk(9), durationMin: 120,
       subtasks: [
-        { id: uid('st'), title: 'جمع‌آوری داده‌های فروش', done: true },
+        { id: uid('st'), title: 'جمع‌آوری داده‌های پیشرفت', done: true },
         { id: uid('st'), title: 'طراحی نمودارها', done: true },
-        { id: uid('st'), title: 'نوشتن تحلیل نهایی', done: false },
+        { id: uid('st'), title: 'نوشتن جمع‌بندی نهایی', done: false },
       ],
       createdAt: now - 5 * 86400000, completedAt: null,
     },
     {
       id: uid('task'), title: 'خرید هدیه تولد مادر', status: 'todo', priority: 'high',
-      tags: ['شخصی'], due: d(2), backlog: false, time: '17:00', durationMin: 60, subtasks: [], createdAt: now - 2 * 86400000, completedAt: null,
+      tags: ['شخصی'], due: d(2), backlog: false, time: clk(17), durationMin: 60, subtasks: [], createdAt: now - 2 * 86400000, completedAt: null,
     },
     {
       id: uid('task'), title: 'تمدید بیمه خودرو', status: 'todo', priority: 'high',
-      tags: ['مالی', 'خودرو'], due: d(-1), backlog: false, time: '11:00', durationMin: 30, subtasks: [], createdAt: now - 9 * 86400000, completedAt: null,
+      tags: ['خودرو'], due: d(-1), backlog: false, time: clk(11), durationMin: 30, subtasks: [], createdAt: now - 9 * 86400000, completedAt: null,
     },
     {
       id: uid('task'), title: 'یادگیری فصل سوم دوره زبان', desc: 'روزی ۲۰ دقیقه تمرین شنیداری',
-      status: 'doing', priority: 'medium', tags: ['آموزش'], due: d(4), backlog: false, time: '20:00', durationMin: 45,
+      status: 'doing', priority: 'medium', tags: ['آموزش'], due: d(4), backlog: false, time: clk(20), durationMin: 45,
       subtasks: [
         { id: uid('st'), title: 'تماشای ۳ درس ویدیویی', done: true },
         { id: uid('st'), title: 'تمرین لغات در اپ', done: false },
@@ -115,8 +73,8 @@ export function seedState(): AppState {
       ], createdAt: now - 86400000, completedAt: null,
     },
     {
-      id: uid('task'), title: 'پرداخت قبض برق', status: 'done', priority: 'medium',
-      tags: ['مالی'], due: d(-3), backlog: false, subtasks: [], createdAt: now - 6 * 86400000, completedAt: t(-3),
+      id: uid('task'), title: 'مرور هفتگی اهداف', status: 'done', priority: 'medium',
+      tags: ['شخصی'], due: d(-3), backlog: false, subtasks: [], createdAt: now - 6 * 86400000, completedAt: t(-3),
     },
     {
       id: uid('task'), title: 'بازبینی رزومه و لینکدین', status: 'done', priority: 'low',
@@ -127,7 +85,11 @@ export function seedState(): AppState {
     },
     {
       id: uid('task'), title: 'معاینه دندان‌پزشکی', status: 'done', priority: 'medium',
-      tags: ['سلامت'], due: d(-2), backlog: false, time: '16:00', durationMin: 60, subtasks: [], createdAt: now - 4 * 86400000, completedAt: t(-2),
+      tags: ['سلامت'], due: d(-2), backlog: false, time: clk(16), durationMin: 60, subtasks: [], createdAt: now - 4 * 86400000, completedAt: t(-2),
+    },
+    {
+      id: uid('task'), title: 'پیاده‌روی ۳۰ دقیقه‌ای', status: 'done', priority: 'low',
+      tags: ['سلامت'], due: d(-1), backlog: false, time: clk(7, 30), durationMin: 30, subtasks: [], createdAt: now - 2 * 86400000, completedAt: t(-1),
     },
     // ── آیتم‌های بک‌لاگ (بدون روز مشخص) ─────────────────────
     {
@@ -151,15 +113,15 @@ export function seedState(): AppState {
   // ── رویدادهای تقویم (شهریور ۱۴۰۵) ────────────────────────
   // ۱۸ شهریور ۱۴۰۵ = ۹ سپتامبر ۲۰۲۶
   const events: CalEvent[] = [
-    { id: uid('ev'), title: 'جلسه تیم طراحی', day: dayTs(1405, 6, 18), time: '10:00', color: '#3b82f6', desc: 'اتاق کنفرانس طبقه دوم', createdAt: now },
-    { id: uid('ev'), title: 'باشگاه — تمرین پا', day: dayTs(1405, 6, 18), time: '18:30', color: '#ef4444', createdAt: now },
-    { id: uid('ev'), title: 'شام خانوادگی', day: dayTs(1405, 6, 20), time: '20:00', color: '#f59e0b', createdAt: now },
-    { id: uid('ev'), title: 'دندان‌پزشکی (چکاپ)', day: dayTs(1405, 6, 22), time: '16:00', color: '#14b8a6', createdAt: now },
-    { id: uid('ev'), title: 'ددلاین پروژه وب‌سایت', day: dayTs(1405, 6, 25), time: '12:00', color: '#ef4444', desc: 'تحویل نسخه نهایی', createdAt: now },
+    { id: uid('ev'), title: 'جلسه تیم طراحی', day: dayTs(1405, 6, 18), time: clk(10), color: '#3b82f6', desc: 'اتاق کنفرانس طبقه دوم', createdAt: now },
+    { id: uid('ev'), title: 'باشگاه — تمرین پا', day: dayTs(1405, 6, 18), time: clk(18, 30), color: '#ef4444', createdAt: now },
+    { id: uid('ev'), title: 'شام خانوادگی', day: dayTs(1405, 6, 20), time: clk(20), color: '#f59e0b', createdAt: now },
+    { id: uid('ev'), title: 'دندان‌پزشکی (چکاپ)', day: dayTs(1405, 6, 22), time: clk(16), color: '#14b8a6', createdAt: now },
+    { id: uid('ev'), title: 'ددلاین پروژه وب‌سایت', day: dayTs(1405, 6, 25), time: clk(12), color: '#ef4444', desc: 'تحویل نسخه نهایی', createdAt: now },
     { id: uid('ev'), title: 'تولد سارا', day: dayTs(1405, 6, 27), time: '', color: '#ec4899', desc: 'یادت نره هدیه بخری!', createdAt: now },
-    { id: uid('ev'), title: 'سفر مشهد', day: dayTs(1405, 7, 2), time: '06:00', color: '#8b5cf6', createdAt: now },
-    { id: uid('ev'), title: 'جلسه بازبینی عملکرد', day: dayTs(1405, 6, 15), time: '11:00', color: '#3b82f6', createdAt: now },
-    { id: uid('ev'), title: 'کلاس یوگا', day: dayTs(1405, 6, 19), time: '07:30', color: '#10b981', createdAt: now },
+    { id: uid('ev'), title: 'سفر مشهد', day: dayTs(1405, 7, 2), time: clk(6), color: '#8b5cf6', createdAt: now },
+    { id: uid('ev'), title: 'جلسه بازبینی عملکرد', day: dayTs(1405, 6, 15), time: clk(11), color: '#3b82f6', createdAt: now },
+    { id: uid('ev'), title: 'کلاس یوگا', day: dayTs(1405, 6, 19), time: clk(7, 30), color: '#10b981', createdAt: now },
   ];
 
   // ── عادت‌ها ──────────────────────────────────────────────
@@ -173,9 +135,9 @@ export function seedState(): AppState {
   const hrnd = mulberry32(77);
   for (const h of habits) {
     for (let back = 20; back >= 0; back--) {
-      const d = addDays(todayStart(), -back);
+      const day = addDays(todayStart(), -back);
       const p = h.id === 'h_water' ? 0.85 : h.id === 'h_walk' ? 0.7 : h.id === 'h_book' ? 0.6 : 0.5;
-      if (hrnd() < p) habitLogs[`${h.id}:${d}`] = true;
+      if (hrnd() < p) habitLogs[`${h.id}:${day}`] = true;
     }
   }
 
@@ -183,7 +145,7 @@ export function seedState(): AppState {
   const notes: Note[] = [
     {
       id: uid('n'), title: 'ایده‌های سفر پاییز', pinned: true, color: '#fef3c7', tags: ['سفر', 'ایده'],
-      body: 'گزینه‌ها:\n۱. مشهد — قطار، ۳ روز\n۲. اصفهان — ماشین شخصی، آخر هفته\n۳. شمال — ویلای دوست\n\nبودجه پیشنهادی: ۱۵ میلیون تومان\nحتماً قبل از مهر رزرو کنم.',
+      body: 'گزینه‌ها:\n۱. مشهد — قطار، ۳ روز\n۲. اصفهان — ماشین شخصی، آخر هفته\n۳. شمال — ویلای دوست\n\nحتماً قبل از مهر رزرو کنم.',
       createdAt: now - 8 * 86400000, updatedAt: now - 86400000,
     },
     {
@@ -193,7 +155,7 @@ export function seedState(): AppState {
     },
     {
       id: uid('n'), title: 'نکات جلسه با مشتری', pinned: false, color: '#dbeafe', tags: ['کاری'],
-      body: 'ـ تمرکز روی سرعت لود سایت\nـ رنگ‌بندی گرم‌تر\nـ درگاه پرداخت دوم اضافه شود\nـ جلسه بعدی: دوشنبه هفته آینده',
+      body: 'ـ تمرکز روی سرعت لود سایت\nـ رنگ‌بندی گرم‌تر\nـ صفحه تماس با ما ساده‌تر شود\nـ جلسه بعدی: دوشنبه هفته آینده',
       createdAt: now - 5 * 86400000, updatedAt: now - 2 * 86400000,
     },
     {
@@ -208,43 +170,70 @@ export function seedState(): AppState {
     },
   ];
 
+  // ── بازتاب‌ها و نمره‌های روزهای گذشته (اعشاری) ───────────
+  const reflections: DayReflection[] = [];
+  const rrnd = mulberry32(20260919);
+  const winsPool = [
+    'گزارش کاری را جلو بردم و ۲۰ دقیقه مطالعه کردم.',
+    'صبح زود بیدار شدم و ورزش کردم.',
+    'کارهای عقب‌افتاده را جمع کردم.',
+    'یک جلسه خوب با تیم داشتم.',
+    'کتاب خواندم و شب زود خوابیدم.',
+  ];
+  const improvePool = ['زودتر خوابیدن', 'کمتر گوشی چک کردن', 'شروع زودتر کار مهم', 'استراحت بین کارها'];
+  const lessonPool = [
+    'شب‌ها دیر خوابیدن صبح را سخت می‌کند.',
+    'کار بزرگ را باید به قدم‌های کوچک شکست.',
+    'تمرکز روی یک کار، نتیجه بهتری می‌دهد.',
+    'برنامه‌ریزی شب قبل، صبح را نجات می‌دهد.',
+  ];
+  const gratPool = ['سلامتی خانواده و یک روز آرام.', 'دوست‌های خوب و انرژی امروز.', 'فرصت یادگیری.', 'یک روز بدون عجله.'];
+  const notePool = [
+    'روز پرکاری بود ولی خوب گذشت.',
+    'انرژی متوسطی داشتم، تمرکز کافی نبود.',
+    'روز متعادلی بود؛ هم کار کردم هم استراحت.',
+    'کمی خسته بودم اما کارهای مهم انجام شد.',
+  ];
+  for (let back = 34; back >= 0; back--) {
+    // چند روز عمداً بدون بازتاب می‌ماند تا حالت «ثبت نشده» هم دیده شود
+    if (back % 9 === 4) continue;
+    const day = addDays(todayStart(), -back);
+    const hasFull = rrnd() > 0.35;
+    const base = 5.2 + rrnd() * 4.4; // بین ۵٫۲ و ۹٫۶
+    const score = Math.round(base * 10) / 10;
+    const mood = Math.min(5, Math.max(1, Math.round(score / 2))) as 1 | 2 | 3 | 4 | 5;
+    const sport = rrnd() > 0.45;
+    const wentOut = rrnd() > 0.4;
+    reflections.push({
+      day,
+      mood,
+      score: back % 7 === 3 ? null : score, // بعضی روزها نمره ثبت نشده
+      wake: clk(6 + Math.floor(rrnd() * 3), Math.floor(rrnd() * 4) * 15),
+      sleep: clk(22 + Math.floor(rrnd() * 2), Math.floor(rrnd() * 4) * 15),
+      sport: sport ? true : undefined,
+      sportType: sport ? ['پیاده‌روی', 'باشگاه', 'دوچرخه', 'یوگا'][Math.floor(rrnd() * 4)] : undefined,
+      wentOut: wentOut ? true : undefined,
+      outPlace: wentOut ? ['پارک', 'خرید', 'کافه', 'خانه دوست'][Math.floor(rrnd() * 4)] : undefined,
+      dayNote: hasFull ? notePool[Math.floor(rrnd() * notePool.length)] : undefined,
+      wins: hasFull ? winsPool[Math.floor(rrnd() * winsPool.length)] : '',
+      improve: hasFull ? improvePool[Math.floor(rrnd() * improvePool.length)] : undefined,
+      lessons: hasFull ? lessonPool[Math.floor(rrnd() * lessonPool.length)] : '',
+      gratitude: hasFull ? gratPool[Math.floor(rrnd() * gratPool.length)] : '',
+      updatedAt: now - back * 86400000,
+    });
+  }
+
   return {
     version: 1,
     profile: { name: 'دوست عزیز' },
-    settings: { theme: 'system', unit: 'toman', financeEnabled: false, weekStart: 'sat', calSystem: 'jalali' },
+    settings: { theme: 'system', weekStart: 'sat', calSystem: 'jalali' },
     taskCats: DEFAULT_TASK_CATS.map((c) => ({ ...c })),
-    transactions: txs.sort((a, b) => b.date - a.date),
     tasks,
     events,
     habits,
     habitLogs,
     notes,
-    reflections: [
-      {
-        day: addDays(todayStart(), -1),
-        mood: 4,
-        score: 8,
-        wake: '07:00',
-        sleep: '23:30',
-        sport: true,
-        sportType: 'پیاده‌روی',
-        wentOut: true,
-        outPlace: 'پارک',
-        dayNote: 'روز پرکاری بود ولی خوب گذشت.',
-        wins: 'گزارش ماهانه را جلو بردم و ۲۰ دقیقه مطالعه کردم.',
-        improve: 'زودتر خوابیدن',
-        lessons: 'شب‌ها دیر خوابیدن صبح را سخت می‌کند.',
-        gratitude: 'سلامتی خانواده و یک روز آروم.',
-        updatedAt: now - 86400000,
-      },
-    ],
-    budgets: [
-      { category: 'خوراک', limit: 12000000 },
-      { category: 'حمل‌ونقل', limit: 3000000 },
-      { category: 'تفریح', limit: 5000000 },
-    ],
-    expenseCats: [...DEFAULT_EXPENSE_CATS],
-    incomeCats: [...DEFAULT_INCOME_CATS],
+    reflections,
     seeded: true,
     createdAt: now,
   };
@@ -255,35 +244,34 @@ export function blankState(): AppState {
   return {
     version: 1,
     profile: { name: '' },
-    settings: { theme: 'system', unit: 'toman', financeEnabled: false, weekStart: 'sat', calSystem: 'jalali' },
+    settings: { theme: 'system', weekStart: 'sat', calSystem: 'jalali' },
     taskCats: DEFAULT_TASK_CATS.map((c) => ({ ...c })),
-    transactions: [],
     tasks: [],
     events: [],
     habits: [],
     habitLogs: {},
     notes: [],
     reflections: [],
-    budgets: [],
-    expenseCats: [...DEFAULT_EXPENSE_CATS],
-    incomeCats: [...DEFAULT_INCOME_CATS],
     seeded: true,
     createdAt: now,
   };
 }
 
+/** بارگذاری حالت از localStorage — نسخه‌های قدیمی‌تر هم پذیرفته و مهاجرت می‌شوند */
 export function loadState(): AppState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as AppState;
-    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.transactions)) return null;
+    const parsed = JSON.parse(raw) as Partial<AppState> & Record<string, unknown>;
+    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.tasks)) return null;
+    const base = blankState();
     return {
-      ...blankState(),
+      ...base,
       ...parsed,
-      settings: { ...blankState().settings, ...(parsed.settings ?? {}) },
-      profile: { ...blankState().profile, ...(parsed.profile ?? {}) },
-    };
+      settings: { ...base.settings, ...(parsed.settings ?? {}) },
+      profile: { ...base.profile, ...(parsed.profile ?? {}) },
+      reflections: Array.isArray(parsed.reflections) ? parsed.reflections : [],
+    } as AppState;
   } catch {
     return null;
   }

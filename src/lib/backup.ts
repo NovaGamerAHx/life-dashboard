@@ -4,7 +4,6 @@ import { toJalaali } from './jalali';
 export interface AutoBackupMeta {
   ts: number;
   size: number;
-  tx: number;
   tasks: number;
   events: number;
   habits: number;
@@ -49,11 +48,10 @@ export function toMeta(e: AutoEntry): AutoBackupMeta {
   return {
     ts: e.ts,
     size: JSON.stringify(d).length,
-    tx: d.transactions.length,
-    tasks: d.tasks.length,
-    events: d.events.length,
-    habits: d.habits.length,
-    notes: d.notes.length,
+    tasks: d.tasks?.length ?? 0,
+    events: d.events?.length ?? 0,
+    habits: d.habits?.length ?? 0,
+    notes: d.notes?.length ?? 0,
     reflections: (d.reflections ?? []).length,
   };
 }
@@ -73,11 +71,8 @@ export function maybeAutoSnapshot(state: AppState): AutoBackupMeta[] {
   const list = readEntries().sort((a, b) => a.ts - b.ts);
   const desc = () => [...list].reverse().map(toMeta);
   const hasData =
-    state.transactions.length +
-      state.tasks.length +
-      state.events.length +
-      state.habits.length +
-      state.notes.length >
+    state.tasks.length + state.events.length + state.habits.length + state.notes.length +
+      (state.reflections?.length ?? 0) >
     0;
   if (!hasData) return desc();
   const now = Date.now();

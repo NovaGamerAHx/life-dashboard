@@ -3,34 +3,24 @@ import { motion } from 'framer-motion';
 import {
   ChevronRight, ChevronLeft, Plus, Check, Pencil, Trash2, Clock,
   Flame, MoonStar, Copy, CheckCheck, Sparkles, CalendarPlus, RotateCcw,
-  PartyPopper, ArrowLeft, Target, Hourglass, Wallet, Star, CalendarDays,
+  PartyPopper, ArrowLeft, Target, Hourglass, Star, CalendarDays, Minus, LineChart,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../lib/store';
-import { useMoney } from '../lib/money';
 import {
   toJalaali, J_MONTHS, toFa, formatJalali, formatGregorian, todayStart,
-  addDays, startOfDay, weekdayName, formatClock, parseClock, diffDays,
+  addDays, startOfDay, formatClock, parseClock, clockToFa, formatScore,
 } from '../lib/jalali';
-import { habitStreak, sumTx, inRange } from '../lib/stats';
-import { PRIORITY_META, type DayReflection, type Task } from '../lib/types';
-import { Card, CardHead, Btn, Badge, Empty, Progress, Confirm, inputCls, Segmented } from '../components/ui';
+import { habitStreak } from '../lib/stats';
+import { buildDaySummary, DEFAULT_SUMMARY_OPTIONS } from '../lib/summary';
+import { MOODS, PRIORITY_META, SCORE_MAX, SCORE_MIN, SCORE_STEP, type DayReflection, type Task } from '../lib/types';
+import { Card, CardHead, Btn, Badge, Empty, Progress, Confirm, inputCls, Segmented, TimeField } from '../components/ui';
 import { TaskModal } from '../components/forms';
 import { CheckIcon } from './Dashboard';
-import { cx } from '../lib/utils';
-
-const MOODS = [
-  { v: 1 as const, e: '😞', l: 'بد' },
-  { v: 2 as const, e: '😐', l: 'معمولی' },
-  { v: 3 as const, e: '🙂', l: 'خوب' },
-  { v: 4 as const, e: '😄', l: 'عالی' },
-  { v: 5 as const, e: '🤩', l: 'فوق‌العاده' },
-];
+import { cx, copyToClipboard } from '../lib/utils';
 
 export default function Today() {
   const { state, moveTask, updateTask, deleteTask, toggleHabit, addTask } = useApp();
-  const { withUnit } = useMoney();
-  const finOn = state.settings.financeEnabled;
   const [params] = useSearchParams();
   const realToday = todayStart();
   const initialDay = (() => {
@@ -46,6 +36,7 @@ export default function Today() {
     const n = raw != null ? Number(raw) : NaN;
     if (Number.isFinite(n) && n > 0) setDay(startOfDay(n));
   }, [params]);
+
   const [showTaskM, setShowTaskM] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [presetForTomorrow, setPresetForTomorrow] = useState(false);
@@ -64,8 +55,8 @@ export default function Today() {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
       if (showTaskM) return;
-      if (e.key === 'ArrowLeft') { setDay((d) => addDays(d, 1)); } // در RTL، چپ = جلو
-      else if (e.key === 'ArrowRight') { setDay((d) => addDays(d, -1)); }
+      if (e.key === 'ArrowLeft') setDay((d) => addDays(d, 1)); // در RTL، چپ = جلو
+      else if (e.key === 'ArrowRight') setDay((d) => addDays(d, -1));
       else if (e.key === 'n' || e.key === 'N' || e.key === 'ی') {
         e.preventDefault();
         setEditTask(null); setPresetForTomorrow(false); setShowTaskM(true);
@@ -92,12 +83,6 @@ export default function Today() {
     () => (state.events.filter((e) => e.day === day) ?? []).sort((a, b) => (a.time || '99').localeCompare(b.time || '99')),
     [state.events, day],
   );
-  const dayTx = useMemo(
-    () => state.transactions.filter((t) => inRange(t.date, day, day + 86400000 - 1)),
-    [state.transactions, day],
-  );
-  const dayExp = sumTx(dayTx, 'expense');
-  const dayInc = sumTx(dayTx, 'income');
 
   const doneCount = dayTasks.filter((t) => t.status === 'done').length;
   const pct = dayTasks.length ? Math.round((doneCount / dayTasks.length) * 100) : 0;
@@ -116,10 +101,7 @@ export default function Today() {
   const quickAdd = () => {
     const title = quickTitle.trim();
     if (!title) return;
-    addTask({
-      title, status: 'todo', priority: quickPri, tags: [],
-      due: day, backlog: false, subtasks: [],
-    });
+    addTask({ title, status: 'todo', priority: quickPri, tags: [], due: day, backlog: false, subtasks: [] });
     setQuickTitle('');
     quickRef.current?.focus();
   };
@@ -152,41 +134,27 @@ export default function Today() {
     return items.sort((a, b) => a.mins - b.mins);
   }, [dayTasks, dayEvents]);
 
+  // خلاصه روز — از سازنده مشترک استفاده می‌کند تا خروجی همه‌جا یکسان و شفاف باشد
+  const summaryText = useMemo(
+    () => buildDaySummary(day, {
+      reflections: state.reflections,
+      tasks: state.tasks,
+      habits: state.habits,
+      habitLogs: state.habitLogs,
+    }, { ...DEFAULT_SUMMARY_OPTIONS, includeScore: true }),
+    [day, state.reflections, state.tasks, state.habits, state.habitLogs],
+  );
+
   const copySummary = async () => {
-    const j = toJalaali(new Date(day));
-    const lines: string[] = [
-      `📅 خلاصه روز ${weekdayName(day)} ${j.jd} ${J_MONTHS[j.jm - 1]} ${j.jy}`,
-      ``,
-      `✅ انجام‌شده: ${doneCount} از ${dayTasks.length} تسک (${pct}٪)`,
-    ];
-    const open = dayTasks.filter((t) => t.status !== 'done');
-    if (open.length) {
-      lines.push(`⏳ باقی‌مانده:`);
-      for (const t of open) lines.push(`  • ${t.title}${t.time ? ` (ساعت ${t.time})` : ''}`);
-    }
-    const hd = activeHabits.filter((h) => state.habitLogs[`${h.id}:${day}`]);
-    lines.push(`🔥 عادت‌ها: ${hd.length} از ${activeHabits.length} انجام شد`);
-    if (finOn && (dayExp > 0 || dayInc > 0)) lines.push(`💰 هزینه: ${dayExp.toLocaleString('fa-IR')} • درآمد: ${dayInc.toLocaleString('fa-IR')} تومان`);
-    if (dayInfo.score != null) lines.push(`⭐ نمره روز: ${dayInfo.score} از ۱۰`);
-    if (dayInfo.wake || dayInfo.sleep) lines.push(`😴 خواب: ${dayInfo.wake ? `بیداری ${dayInfo.wake}` : ''}${dayInfo.wake && dayInfo.sleep ? ' • ' : ''}${dayInfo.sleep ? `خواب ${dayInfo.sleep}` : ''}`);
-    if (dayInfo.sport) lines.push(`🏃 ورزش: بله${dayInfo.sportType ? ` (${dayInfo.sportType})` : ''}`);
-    if (dayInfo.wentOut) lines.push(`🚶 بیرون: بله${dayInfo.outPlace ? ` (${dayInfo.outPlace})` : ''}`);
-    if (dayInfo.dayNote) lines.push(`📝 یادداشت روز: ${dayInfo.dayNote}`);
-    if (reflection) {
-      lines.push(`🌙 حال روز: ${MOODS.find((m) => m.v === reflection.mood)?.e ?? ''}`);
-      if (reflection.wins) lines.push(`🏆 بردها: ${reflection.wins}`);
-      if (reflection.gratitude) lines.push(`🙏 قدردانی: ${reflection.gratitude}`);
-    }
-    try {
-      await navigator.clipboard.writeText(lines.join('\n'));
+    const ok = await copyToClipboard(summaryText);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
-    } catch { /* کلیپ‌برد در دسترس نیست */ }
+    }
   };
 
   const rollover = () => {
-    const open = dayTasks.filter((t) => t.status !== 'done');
-    for (const t of open) updateTask(t.id, { due: tomorrow, backlog: false });
+    for (const t of dayTasks.filter((x) => x.status !== 'done')) updateTask(t.id, { due: tomorrow, backlog: false });
   };
 
   const j = toJalaali(new Date(day));
@@ -196,7 +164,7 @@ export default function Today() {
       {/* ناوبری روزانه */}
       <Card className="overflow-hidden">
         <div className="flex items-center gap-2 bg-gradient-to-l from-emerald-600 to-teal-600 px-4 py-3.5 text-white">
-          <button onClick={() => setDay((d) => addDays(d, -1))} className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 transition hover:bg-white/25" title="روز قبل (→)">
+          <button onClick={() => setDay((d) => addDays(d, -1))} aria-label="روز قبل" className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 transition hover:bg-white/25" title="روز قبل (→)">
             <ChevronRight size={18} />
           </button>
           <div className="min-w-0 flex-1 text-center">
@@ -206,7 +174,7 @@ export default function Today() {
             </h2>
             <p dir="ltr" className="tabular mt-0.5 text-[11px] text-emerald-100/90">{formatGregorian(day)}</p>
           </div>
-          <button onClick={() => setDay((d) => addDays(d, 1))} className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 transition hover:bg-white/25" title="روز بعد (←)">
+          <button onClick={() => setDay((d) => addDays(d, 1))} aria-label="روز بعد" className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 transition hover:bg-white/25" title="روز بعد (←)">
             <ChevronLeft size={18} />
           </button>
         </div>
@@ -218,40 +186,52 @@ export default function Today() {
             {copied ? <CheckCheck size={14} className="text-emerald-500" /> : <Copy size={14} />}
             {copied ? 'کپی شد!' : 'کپی خلاصه روز'}
           </Btn>
+          <Link to="/insights" className="flex h-8 items-center gap-1 rounded-xl bg-emerald-600/10 px-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-600/15 dark:text-emerald-300">
+            <LineChart size={14} /> تحلیل و خلاصه‌ها
+          </Link>
         </div>
       </Card>
 
       {/* ۱. اطلاعات پایه روز */}
-      <div className={cx('grid grid-cols-2 gap-3', finOn ? 'md:grid-cols-3 xl:grid-cols-5' : 'md:grid-cols-4')}>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <DayInfo icon={<Target size={17} />} label="پیشرفت تسک‌ها" value={`${toFa(pct)}٪`} sub={`${toFa(doneCount)} از ${toFa(dayTasks.length)} انجام شد`} c="from-emerald-500 to-teal-600" />
         <DayInfo icon={<Hourglass size={17} />} label="باقی‌مانده" value={`${toFa(remaining)} تسک`} sub={remaining === 0 && dayTasks.length > 0 ? 'روزت کامل شد! 🎉' : 'ادامه بده 💪'} c="from-sky-500 to-blue-600" />
-        {finOn && (
-          <DayInfo icon={<Wallet size={17} />} label="هزینه امروز" value={withUnit(dayExp)} sub={`${toFa(dayTx.filter((t) => t.type === 'expense').length)} تراکنش`} c="from-rose-500 to-pink-600" />
-        )}
-        <DayInfo icon={<Star size={17} />} label="نمره روز" value={dayInfo.score != null ? `${toFa(dayInfo.score)} از ۱۰` : 'ثبت نشده'} sub={dayInfo.sport ? `🏃 ورزش${dayInfo.sportType ? `: ${dayInfo.sportType}` : ''}` : 'ورزش ثبت نشده'} c="from-amber-500 to-orange-600" />
-        <DayInfo icon={<CalendarDays size={17} />} label="رویدادها" value={`${toFa(dayEvents.length)} رویداد`} sub={dayEvents.length ? dayEvents[0].title : 'برنامه‌ای ثبت نشده'} c="from-violet-500 to-purple-600" />
+        <DayInfo
+          icon={<Star size={17} />}
+          label="نمره روز"
+          value={dayInfo.score != null ? `${formatScore(dayInfo.score)} از ۱۰` : 'ثبت نشده'}
+          sub={dayInfo.score != null ? 'با یک رقم اعشار ثبت می‌شود' : 'در بخش بازتاب، نمره بده'}
+          c="from-amber-500 to-orange-600"
+        />
+        <DayInfo
+          icon={<CalendarDays size={17} />}
+          label="رویدادها"
+          value={`${toFa(dayEvents.length)} رویداد`}
+          sub={dayEvents.length ? dayEvents[0].title : 'برنامه‌ای ثبت نشده'}
+          c="from-violet-500 to-purple-600"
+        />
       </div>
 
       {/* اطلاعات پایه روز (فرم فشرده اینلاین) */}
-      <DayBasicsCard day={day} />
+      <DayBasicsCard key={day} day={day} />
       {dayTasks.length > 0 && (
         <Card className="p-4">
           <div className="flex items-center justify-between text-xs font-bold text-slate-500">
-            <span>پیشرفت امروز</span>
+            <span>پیشرفت این روز</span>
             <span className="tabular">{toFa(pct)}٪</span>
           </div>
           <div className="mt-2"><Progress value={pct} h={10} color={pct === 100 ? '#10b981' : '#0ea5e9'} /></div>
           {pct === 100 && (
             <p className="mt-2 flex items-center gap-1.5 text-xs font-black text-emerald-600 dark:text-emerald-400">
-              <PartyPopper size={15} /> همه تسک‌های امروز تمام شد — فوق‌العاده‌ای!
+              <PartyPopper size={15} /> همه تسک‌های این روز تمام شد — فوق‌العاده‌ای!
             </p>
           )}
         </Card>
       )}
 
       <div className="grid items-start gap-5 xl:grid-cols-5">
-        <div className="space-y-5 xl:col-span-3">
-          {/* ۲. تسک‌های امروز */}
+        <div className="min-w-0 space-y-5 xl:col-span-3">
+          {/* ۲. تسک‌های روز */}
           <Card>
             <CardHead
               title={isToday ? 'تسک‌های امروز' : `تسک‌های ${formatJalali(day)}`}
@@ -259,8 +239,8 @@ export default function Today() {
               action={<Btn size="sm" onClick={() => { setEditTask(null); setPresetForTomorrow(false); setShowTaskM(true); }}><Plus size={14} /> تسک</Btn>}
             />
             <div className="px-5 pb-3">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
+              <div className="flex flex-wrap gap-2">
+                <div className="relative min-w-0 flex-1 basis-[170px]">
                   <input
                     ref={quickRef}
                     value={quickTitle}
@@ -270,12 +250,12 @@ export default function Today() {
                     className={inputCls}
                   />
                 </div>
-                <select value={quickPri} onChange={(e) => setQuickPri(e.target.value as Task['priority'])} className={cx(inputCls, 'w-auto')} title="اولویت">
+                <select value={quickPri} onChange={(e) => setQuickPri(e.target.value as Task['priority'])} className={cx(inputCls, 'w-auto max-w-[104px] shrink-0')} title="اولویت">
                   <option value="high">مهم</option>
                   <option value="medium">متوسط</option>
                   <option value="low">عادی</option>
                 </select>
-                <Btn onClick={quickAdd}><Plus size={15} /></Btn>
+                <Btn onClick={quickAdd} title="افزودن"><Plus size={15} /></Btn>
               </div>
             </div>
             <div className="px-5 pb-5">
@@ -327,7 +307,11 @@ export default function Today() {
                           </p>
                         )}
                         <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                          {t.time && <span className="tabular inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-bold dark:bg-white/10"><Clock size={10} />{t.time}</span>}
+                          {t.time && (
+                            <span className="tabular inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-bold dark:bg-white/10">
+                              <Clock size={10} />{clockToFa(t.time)}
+                            </span>
+                          )}
                           <Badge tone={t.priority === 'high' ? 'red' : t.priority === 'medium' ? 'amber' : 'blue'}>{PRIORITY_META[t.priority].label}</Badge>
                           {t.tags.slice(0, 2).map((tg) => (
                             <span key={tg} className="rounded-md bg-slate-900/5 px-1.5 py-0.5 font-bold dark:bg-white/10">#{tg}</span>
@@ -342,7 +326,7 @@ export default function Today() {
                   ))}
                 </ul>
               )}
-              {remaining > 0 && dayTasks.some((t) => t.status !== 'done') && !isToday && diffDays(day, Date.now()) < 0 && (
+              {remaining > 0 && dayTasks.some((t) => t.status !== 'done') && !isToday && day < realToday && (
                 <Btn variant="soft" className="mt-3 w-full" onClick={rollover}>
                   <RotateCcw size={14} /> انتقال {toFa(remaining)} تسک باز به فردا
                 </Btn>
@@ -353,7 +337,7 @@ export default function Today() {
           {/* ۵. برنامه‌ریزی فردا */}
           <Card>
             <CardHead
-              title={`برنامه‌ریزی فردا (${formatJalali(tomorrow, { weekday: false })})`}
+              title={`برنامه‌ریزی فردا (${formatJalali(tomorrow)})`}
               sub={`${toFa(tomorrowTasks.length)} تسک برای فردا ثبت شده`}
               action={<Btn size="sm" variant="soft" onClick={() => { setEditTask(null); setPresetForTomorrow(true); setShowTaskM(true); }}><CalendarPlus size={14} /> تسک فردا</Btn>}
             />
@@ -367,8 +351,8 @@ export default function Today() {
                   {tomorrowTasks.map((t) => (
                     <li key={t.id} className="flex items-center gap-2.5 rounded-xl border border-slate-100 px-3 py-2 text-[13px] font-bold text-slate-600 dark:border-white/5 dark:text-slate-300">
                       <span className={cx('h-6 w-1 rounded-full', t.priority === 'high' ? 'bg-rose-500' : t.priority === 'medium' ? 'bg-amber-400' : 'bg-sky-400')} />
-                      <span className="flex-1 truncate">{t.title}</span>
-                      {t.time && <span className="tabular text-[11px] text-slate-400">{t.time}</span>}
+                      <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                      {t.time && <span className="tabular text-[11px] text-slate-400">{clockToFa(t.time)}</span>}
                     </li>
                   ))}
                 </ul>
@@ -377,13 +361,13 @@ export default function Today() {
           </Card>
 
           {/* ۶. بازتاب پایان روز */}
-          <ReflectionCard day={day} reflection={reflection} />
+          <ReflectionCard key={day} day={day} reflection={reflection} />
         </div>
 
-        <div className="space-y-5 xl:col-span-2">
+        <div className="min-w-0 space-y-5 xl:col-span-2">
           {/* ۳. تایم‌لاین روز */}
           <Card>
-            <CardHead title="تایم‌لاین روز" sub="تسک‌ها و رویدادهای ساعت‌دار به ترتیب زمان" />
+            <CardHead title="تایم‌لاین روز" sub="تسک‌ها و رویدادهای ساعت‌دار به ترتیب زمان (۲۴ساعته)" />
             <div className="px-5 pb-5">
               {timeline.length === 0 ? (
                 <Empty icon={<Clock size={26} />} title="تایم‌لاین خالی است" sub="برای تسک‌ها و رویدادها ساعت تعیین کن تا اینجا نمایش داده شوند" />
@@ -413,7 +397,7 @@ export default function Today() {
               {dayEvents.filter((e) => !e.time).map((e) => (
                 <div key={e.id} className="mt-1.5 flex items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-500 dark:bg-white/5 dark:text-slate-300">
                   <span className="h-5 w-1 rounded-full" style={{ background: e.color }} />
-                  <span className="flex-1 truncate">{e.title}</span>
+                  <span className="min-w-0 flex-1 truncate">{e.title}</span>
                   <span className="text-[10px] text-slate-400">بدون ساعت</span>
                 </div>
               ))}
@@ -447,6 +431,24 @@ export default function Today() {
                   </button>
                 );
               })}
+            </div>
+          </Card>
+
+          {/* پیش‌نمایش خلاصه روز */}
+          <Card>
+            <CardHead
+              title="خلاصه آماده این روز"
+              sub="همان متنی که با دکمه «کپی خلاصه روز» کپی می‌شود"
+              action={
+                <Btn size="xs" variant="outline" onClick={copySummary}>
+                  {copied ? <CheckCheck size={12} /> : <Copy size={12} />} کپی
+                </Btn>
+              }
+            />
+            <div className="px-5 pb-5">
+              <pre dir="rtl" className="max-h-64 overflow-auto whitespace-pre-wrap rounded-2xl bg-slate-50/70 p-3.5 text-[11px] leading-6 text-slate-600 dark:bg-white/[0.03] dark:text-slate-300">
+                {summaryText}
+              </pre>
             </div>
           </Card>
 
@@ -485,72 +487,262 @@ function DayInfo({ icon, label, value, sub, c }: { icon: React.ReactNode; label:
   );
 }
 
-function ReflectionCard({ day, reflection }: { day: number; reflection?: DayReflection }) {
-  const { saveReflection, deleteReflection } = useApp();
-  const [mood, setMood] = useState<DayReflection['mood']>(reflection?.mood ?? 3);
-  const [score, setScore] = useState<number | null>(reflection?.score ?? null);
-  const [wins, setWins] = useState(reflection?.wins ?? '');
-  const [improve, setImprove] = useState(reflection?.improve ?? '');
-  const [lessons, setLessons] = useState(reflection?.lessons ?? '');
-  const [gratitude, setGratitude] = useState(reflection?.gratitude ?? '');
-  const [saved, setSaved] = useState(false);
+/**
+ * نمره روز: هم با نوار قابل جابه‌جایی، هم با ورود دستی عدد (اعشار با یک رقم).
+ * ورودی عدد هم ارقام فارسی و هم لاتین را می‌پذیرد.
+ */
+function ScorePicker({
+  score, onChange,
+}: {
+  score: number | null;
+  onChange: (v: number | null) => void;
+}) {
+  const [txt, setTxt] = useState(score != null ? formatScore(score) : '');
+  const [invalid, setInvalid] = useState(false);
+  const focused = useRef(false);
 
   useEffect(() => {
-    setMood(reflection?.mood ?? 3);
-    setScore(reflection?.score ?? null);
-    setWins(reflection?.wins ?? '');
-    setImprove(reflection?.improve ?? '');
-    setLessons(reflection?.lessons ?? '');
-    setGratitude(reflection?.gratitude ?? '');
-    setSaved(false);
-  }, [day, reflection?.mood, reflection?.score, reflection?.wins, reflection?.improve, reflection?.lessons, reflection?.gratitude]);
+    if (!focused.current) {
+      setTxt(score != null ? formatScore(score) : '');
+      setInvalid(false);
+    }
+  }, [score]);
 
-  const save = () => {
+  const apply = (raw: string) => {
+    const cleaned = raw
+      .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+      .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+      .replace(/[,،]/g, '')
+      .replace(/[٫]/g, '.')
+      .trim();
+    if (!cleaned) {
+      onChange(null);
+      setInvalid(false);
+      return;
+    }
+    const n = Number(cleaned);
+    if (!Number.isFinite(n)) { setInvalid(true); return; }
+    const clamped = Math.min(SCORE_MAX, Math.max(SCORE_MIN, Math.round(n * 10) / 10));
+    setInvalid(false);
+    onChange(clamped);
+  };
+
+  const step = (delta: number) => {
+    const cur = score ?? SCORE_MIN;
+    const next = Math.min(SCORE_MAX, Math.max(SCORE_MIN, Math.round((cur + delta) * 10) / 10));
+    onChange(next);
+  };
+
+  const sliderValue = score ?? (SCORE_MIN + SCORE_MAX) / 2;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => step(-SCORE_STEP)}
+          aria-label="کاهش نمره"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-amber-400 hover:text-amber-600 disabled:opacity-40 dark:border-white/10"
+          disabled={score != null && score <= SCORE_MIN}
+        >
+          <Minus size={15} />
+        </button>
+
+        <input
+          type="range"
+          min={SCORE_MIN}
+          max={SCORE_MAX}
+          step={SCORE_STEP}
+          value={sliderValue}
+          onChange={(e) => onChange(Math.round(Number(e.target.value) * 10) / 10)}
+          aria-label="نمره روز با نوار لغزنده"
+          className="h-2 min-w-[100px] flex-1 basis-[130px] accent-amber-500"
+          dir="ltr"
+        />
+
+        <button
+          type="button"
+          onClick={() => step(SCORE_STEP)}
+          aria-label="افزایش نمره"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-amber-400 hover:text-amber-600 disabled:opacity-40 dark:border-white/10"
+          disabled={score != null && score >= SCORE_MAX}
+        >
+          <Plus size={15} />
+        </button>
+
+        <div className="relative w-20 shrink-0">
+          <input
+            inputMode="decimal"
+            dir="ltr"
+            value={txt}
+            placeholder="۷٫۵"
+            aria-label="ورود دستی نمره"
+            onFocus={() => { focused.current = true; }}
+            onChange={(e) => setTxt(e.target.value)}
+            onBlur={(e) => {
+              focused.current = false;
+              apply(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); apply(txt); (e.target as HTMLInputElement).blur(); }
+            }}
+            className={cx(
+              inputCls, 'tabular h-10 text-center text-base font-black',
+              invalid && 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/10',
+            )}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => { onChange(null); setTxt(''); setInvalid(false); }}
+          title={score == null ? 'نمره‌ای ثبت نشده' : 'پاک کردن نمره'}
+          className={cx(
+            'tabular grid h-10 shrink-0 place-items-center rounded-xl px-3 text-xs font-black transition',
+            score != null ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-slate-100 text-slate-400 dark:bg-white/10',
+          )}
+        >
+          {score != null ? `${formatScore(score)} از ۱۰` : 'ثبت نشده'}
+        </button>
+      </div>
+
+      <div className="flex justify-between text-[10px] font-bold text-slate-400">
+        <span>۰ • افتضاح</span>
+        <span>۵ • متوسط</span>
+        <span>۱۰ • عالی</span>
+      </div>
+      <p className="text-[10px] text-slate-400">
+        نمره با دقت یک رقم اعشار ثبت می‌شود (مثلاً ۷٫۵) — هم با نوار، هم با تایپ عدد، هم با کلیدهای ▲▼.
+      </p>
+      {invalid && <p className="text-[11px] font-bold text-rose-500">عدد معتبر بین ۰ تا ۱۰ وارد کنید</p>}
+    </div>
+  );
+}
+
+interface RDraft {
+  mood: DayReflection['mood'];
+  score: number | null;
+  wins: string;
+  improve: string;
+  lessons: string;
+  gratitude: string;
+}
+
+const emptyDraft: RDraft = { mood: 3, score: null, wins: '', improve: '', lessons: '', gratitude: '' };
+
+const draftOf = (r?: DayReflection): RDraft =>
+  r
+    ? { mood: r.mood ?? 3, score: r.score ?? null, wins: r.wins ?? '', improve: r.improve ?? '', lessons: r.lessons ?? '', gratitude: r.gratitude ?? '' }
+    : { ...emptyDraft };
+
+function ReflectionCard({ day, reflection }: { day: number; reflection?: DayReflection }) {
+  const { saveReflection, deleteReflection } = useApp();
+  // پیش‌نویس با تغییر روز ریست می‌شود (key در والد)، پس افکت همگام‌سازی لازم نیست
+  const [draft, setDraft] = useState<RDraft>(() => draftOf(reflection));
+  const [flash, setFlash] = useState(false);
+  const live = useRef(reflection);
+
+  useEffect(() => { live.current = reflection; }, [reflection]);
+  useEffect(() => {
+    if (!flash) return;
+    const h = setTimeout(() => setFlash(false), 1800);
+    return () => clearTimeout(h);
+  }, [flash]);
+
+  const stored = draftOf(reflection);
+  const dirty =
+    draft.mood !== stored.mood ||
+    draft.score !== stored.score ||
+    draft.wins.trim() !== stored.wins.trim() ||
+    draft.improve.trim() !== stored.improve.trim() ||
+    draft.lessons.trim() !== stored.lessons.trim() ||
+    draft.gratitude.trim() !== stored.gratitude.trim();
+
+  /** رکورد کامل روز؛ فیلدهای پایه از آخرین مقدار ذخیره‌شده خوانده می‌شوند تا چیزی بازنویسی نشود */
+  const persist = (d: RDraft) => {
+    const b = live.current;
     saveReflection({
       day,
-      mood,
-      score,
-      wake: reflection?.wake,
-      sleep: reflection?.sleep,
-      sport: reflection?.sport,
-      sportType: reflection?.sportType,
-      wentOut: reflection?.wentOut,
-      outPlace: reflection?.outPlace,
-      dayNote: reflection?.dayNote,
-      wins: wins.trim(),
-      improve: improve.trim() || undefined,
-      lessons: lessons.trim(),
-      gratitude: gratitude.trim(),
+      mood: d.mood,
+      score: d.score,
+      wake: b?.wake,
+      sleep: b?.sleep,
+      sport: b?.sport,
+      sportType: b?.sportType,
+      wentOut: b?.wentOut,
+      outPlace: b?.outPlace,
+      dayNote: b?.dayNote,
+      wins: d.wins.trim(),
+      improve: d.improve.trim() || undefined,
+      lessons: d.lessons.trim(),
+      gratitude: d.gratitude.trim(),
     });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setFlash(true);
+  };
+
+  const set = <K extends keyof RDraft>(k: K, v: RDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
+
+  // ذخیره خودکار (debounce) تا هیچ نوشته‌ای از دست نرود
+  useEffect(() => {
+    if (!dirty) return;
+    const h = setTimeout(() => persist(draft), 900);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, dirty, day]);
+
+  /** نمره بلافاصله ذخیره می‌شود: اسلایدر، دکمه‌های ±۰٫۱ و ورود دستی */
+  const onScore = (v: number | null) => {
+    const next = { ...draft, score: v };
+    setDraft(next);
+    persist(next);
+  };
+
+  const clearAll = () => {
+    deleteReflection(day);
+    setDraft(draftOf(undefined));
+    setFlash(false);
   };
 
   return (
     <Card>
       <CardHead
         title="بازتاب پایان روز 🌙"
-        sub="دو دقیقه بنویس؛ فردا بهتر می‌شوی"
+        sub="نمره بلافاصله ذخیره می‌شود؛ متن‌ها هم خودکار ذخیره می‌شوند"
         action={
-          reflection ? (
-            <button onClick={() => deleteReflection(day)} className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-400 transition hover:bg-rose-500/10 hover:text-rose-500">
-              <Trash2 size={13} /> پاک
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cx(
+                'flex items-center gap-1 rounded-xl px-2 py-1 text-[10px] font-black',
+                dirty ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
+              )}
+            >
+              {dirty ? <><Pencil size={11} /> ذخیره‌نشده…</> : <><Check size={11} /> ذخیره شد</>}
+            </span>
+            {reflection && (
+              <button
+                onClick={clearAll}
+                title="پاک کردن بازتاب این روز"
+                className="flex items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-bold text-slate-400 transition hover:bg-rose-500/10 hover:text-rose-500"
+              >
+                <Trash2 size={13} /> پاک
+              </button>
+            )}
+          </div>
         }
       />
       <div className="space-y-3.5 px-5 pb-5">
         <div>
-          <p className="mb-2 text-xs font-bold text-slate-500">امروزت چطور بود؟</p>
-          <div className="flex gap-1.5">
+          <p className="mb-2 text-xs font-bold text-slate-500">این روز چطور بود؟</p>
+          <div className="flex flex-wrap gap-1.5">
             {MOODS.map((m) => (
               <button
                 key={m.v}
-                onClick={() => setMood(m.v)}
+                onClick={() => set('mood', m.v)}
                 title={m.l}
+                aria-pressed={draft.mood === m.v}
                 className={cx(
-                  'flex h-12 flex-1 flex-col items-center justify-center rounded-2xl border-2 text-lg transition active:scale-95',
-                  mood === m.v ? 'border-emerald-500 bg-emerald-500/5' : 'border-slate-100 hover:border-slate-200 dark:border-white/5',
+                  'flex h-12 min-w-[56px] flex-1 flex-col items-center justify-center rounded-2xl border-2 text-lg transition active:scale-95',
+                  draft.mood === m.v ? 'border-emerald-500 bg-emerald-500/5' : 'border-slate-100 hover:border-slate-200 dark:border-white/5',
                 )}
               >
                 {m.e}
@@ -559,54 +751,30 @@ function ReflectionCard({ day, reflection }: { day: number; reflection?: DayRefl
             ))}
           </div>
         </div>
+
         <div>
-          <p className="mb-1.5 text-xs font-bold text-slate-500">⭐ نمره روز (۰ تا ۱۰)</p>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min={0}
-              max={10}
-              step={1}
-              value={score ?? 5}
-              onChange={(e) => setScore(Number(e.target.value))}
-              className="h-2 flex-1 accent-amber-500"
-              dir="ltr"
-            />
-            <button
-              onClick={() => setScore((s) => (s == null ? 5 : null))}
-              title={score == null ? 'ثبت نمره' : 'حذف نمره'}
-              className={cx(
-                'tabular grid h-10 w-12 shrink-0 place-items-center rounded-xl text-base font-black transition',
-                score != null ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30' : 'bg-slate-100 text-slate-400 dark:bg-white/10',
-              )}
-            >
-              {score != null ? toFa(score) : '—'}
-            </button>
-          </div>
-          <div className="mt-1 flex justify-between text-[10px] font-bold text-slate-400">
-            <span>۱۰ • عالی</span>
-            <span>۵ • متوسط</span>
-            <span>۰ • افتضاح</span>
-          </div>
+          <p className="mb-2 text-xs font-bold text-slate-500">⭐ نمره روز (۰ تا ۱۰ — با یک رقم اعشار)</p>
+          <ScorePicker score={draft.score} onChange={onScore} />
         </div>
+
         <div>
-          <p className="mb-1.5 text-xs font-bold text-slate-500">🏆 ۳ دستاورد / نکته مثبت امروز</p>
-          <textarea value={wins} onChange={(e) => setWins(e.target.value)} rows={2} placeholder="سه چیز خوبی که امروز اتفاق افتاد…" className={cx(inputCls, 'h-auto py-2.5 leading-6')} />
+          <p className="mb-1.5 text-xs font-bold text-slate-500">🏆 دستاوردها / نکات مثبت این روز</p>
+          <textarea value={draft.wins} onChange={(e) => set('wins', e.target.value)} rows={2} placeholder="چیزهای خوبی که این روز اتفاق افتاد…" className={cx(inputCls, 'h-auto py-2.5 leading-6')} />
         </div>
         <div>
           <p className="mb-1.5 text-xs font-bold text-slate-500">🔧 ۱ مورد قابل بهبود</p>
-          <input value={improve} onChange={(e) => setImprove(e.target.value)} placeholder="فردا چه چیزی را بهتر می‌کنی؟" className={inputCls} />
+          <input value={draft.improve} onChange={(e) => set('improve', e.target.value)} placeholder="فردا چه چیزی را بهتر می‌کنی؟" className={inputCls} />
         </div>
         <div>
           <p className="mb-1.5 text-xs font-bold text-slate-500">💡 ۱ درس آموخته‌شده</p>
-          <textarea value={lessons} onChange={(e) => setLessons(e.target.value)} rows={2} placeholder="چه چیزی یاد گرفتی؟" className={cx(inputCls, 'h-auto py-2.5 leading-6')} />
+          <textarea value={draft.lessons} onChange={(e) => set('lessons', e.target.value)} rows={2} placeholder="چه چیزی یاد گرفتی؟" className={cx(inputCls, 'h-auto py-2.5 leading-6')} />
         </div>
         <div>
           <p className="mb-1.5 text-xs font-bold text-slate-500">🙏 قدردانی</p>
-          <input value={gratitude} onChange={(e) => setGratitude(e.target.value)} placeholder="بابت چه چیزی شکرگزاری؟" className={inputCls} />
+          <input value={draft.gratitude} onChange={(e) => set('gratitude', e.target.value)} placeholder="بابت چه چیزی شکرگزاری؟" className={inputCls} />
         </div>
-        <Btn onClick={save} className="w-full">
-          {saved ? <><Check size={15} /> ذخیره شد ✓</> : <><MoonStar size={15} /> ذخیره بازتاب</>}
+        <Btn onClick={() => persist(draft)} className="w-full">
+          {flash && !dirty ? <><Check size={15} /> ذخیره شد ✓</> : <><MoonStar size={15} /> ذخیره بازتاب</>}
         </Btn>
       </div>
     </Card>
@@ -626,7 +794,7 @@ function tipOfDay(day: number): string {
   return tips[Math.abs(day) % tips.length];
 }
 
-/** کارت اطلاعات پایه روز: خواب/بیداری، روحیه، ورزش، بیرون، یادداشت (ذخیره خودکار در بازتاب روز) */
+/** کارت اطلاعات پایه روز: خواب/بیداری (۲۴ساعته)، ورزش، بیرون، یادداشت (ذخیره خودکار در بازتاب روز) */
 function DayBasicsCard({ day }: { day: number }) {
   const { state, saveReflection } = useApp();
   const ref = (state.reflections ?? []).find((r) => r.day === day);
@@ -639,22 +807,15 @@ function DayBasicsCard({ day }: { day: number }) {
   const [outPlace, setOutPlace] = useState(ref?.outPlace ?? '');
   const [dayNote, setDayNote] = useState(ref?.dayNote ?? '');
 
-  useEffect(() => {
-    setWake(ref?.wake ?? '');
-    setSleep(ref?.sleep ?? '');
-    setSport(ref?.sport ?? false);
-    setSportType(ref?.sportType ?? '');
-    setWentOut(ref?.wentOut ?? false);
-    setOutPlace(ref?.outPlace ?? '');
-    setDayNote(ref?.dayNote ?? '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day]);
-
   // ذخیره خودکار (debounce) — اطلاعات پایه در همان رکورد بازتاب روز نگه داشته می‌شود
   useEffect(() => {
     const h = setTimeout(() => {
       const cur = { wake, sleep, sport, sportType, wentOut, outPlace, dayNote };
-      const prev = { wake: ref?.wake ?? '', sleep: ref?.sleep ?? '', sport: ref?.sport ?? false, sportType: ref?.sportType ?? '', wentOut: ref?.wentOut ?? false, outPlace: ref?.outPlace ?? '', dayNote: ref?.dayNote ?? '' };
+      const prev = {
+        wake: ref?.wake ?? '', sleep: ref?.sleep ?? '', sport: ref?.sport ?? false,
+        sportType: ref?.sportType ?? '', wentOut: ref?.wentOut ?? false, outPlace: ref?.outPlace ?? '',
+        dayNote: ref?.dayNote ?? '',
+      };
       if (JSON.stringify(cur) === JSON.stringify(prev)) return;
       saveReflection({
         day,
@@ -681,21 +842,25 @@ function DayBasicsCard({ day }: { day: number }) {
 
   return (
     <Card>
-      <CardHead title="اطلاعات پایه روز" sub="فشرده و اینلاین — خودکار ذخیره می‌شود" />
+      <CardHead title="اطلاعات پایه روز" sub="ساعت‌ها ۲۴ساعته (۰۰:۰۰ تا ۲۳:۵۹) — خودکار ذخیره می‌شود" />
       <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-3">
         <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
           <p className="mb-2 text-xs font-black text-slate-500">😴 خواب و بیداری</p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-start gap-2">
             <label className="flex-1 text-[11px] text-slate-400">
               بیداری
-              <input type="time" value={wake} onChange={(e) => setWake(e.target.value)} dir="ltr" className={cx(inputCls, 'tabular mt-1 text-center')} />
+              <div className="mt-1">
+                <TimeField value={wake} onChange={setWake} ariaLabel="ساعت بیداری" placeholder="۰۷:۰۰" />
+              </div>
             </label>
             <label className="flex-1 text-[11px] text-slate-400">
               خواب
-              <input type="time" value={sleep} onChange={(e) => setSleep(e.target.value)} dir="ltr" className={cx(inputCls, 'tabular mt-1 text-center')} />
+              <div className="mt-1">
+                <TimeField value={sleep} onChange={setSleep} ariaLabel="ساعت خواب" placeholder="۲۳:۳۰" />
+              </div>
             </label>
           </div>
-          {sleepDur && <p className="tabular mt-2 text-[11px] font-bold text-sky-600 dark:text-sky-400">مدت خواب: حدود {toFa(sleepDur)}</p>}
+          {sleepDur && <p className="tabular mt-2 text-[11px] font-bold text-sky-600 dark:text-sky-400">مدت خواب: حدود {sleepDur}</p>}
         </div>
 
         <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
@@ -716,7 +881,7 @@ function DayBasicsCard({ day }: { day: number }) {
 
         <div className="rounded-2xl border border-slate-100 p-3.5 sm:col-span-2 xl:col-span-3 dark:border-white/5">
           <p className="mb-2 text-xs font-black text-slate-500">📝 یادداشت آزاد روز</p>
-          <textarea value={dayNote} onChange={(e) => setDayNote(e.target.value)} rows={2} placeholder="هر نکته‌ای درباره امروز…" className={cx(inputCls, 'h-auto py-2.5 text-xs leading-6')} />
+          <textarea value={dayNote} onChange={(e) => setDayNote(e.target.value)} rows={2} placeholder="هر نکته‌ای درباره این روز…" className={cx(inputCls, 'h-auto py-2.5 text-xs leading-6')} />
         </div>
       </div>
     </Card>

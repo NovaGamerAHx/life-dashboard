@@ -8,27 +8,21 @@ import { useApp } from '../lib/store';
 import {
   getMonthGrid, addMonthsJalali, J_MONTHS, J_WEEKDAYS_SHORT, toJalaali,
   toFa, formatJalali, todayStart, toGregorian, startOfDay, addDays,
-  weekdayName, diffDays, jalaaliMonthLength, formatGregorian,
+  weekdayName, diffDays, jalaaliMonthLength, formatGregorian, formatScore, clockToFa,
 } from '../lib/jalali';
+import { reflectionMap } from '../lib/stats';
+import { useNow } from '../lib/hooks';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHead, Btn, Badge, Empty, Confirm, Segmented } from '../components/ui';
 import { EventModal } from '../components/forms';
-import type { CalEvent } from '../lib/types';
+import type { CalEvent, Task } from '../lib/types';
 import { cx } from '../lib/utils';
 
 type Mode = 'month' | 'agenda';
 
-function useNavigateCal() {
-  try {
-    return useNavigate();
-  } catch {
-    return () => {};
-  }
-}
-
 export default function Calendar() {
   const { state, deleteEvent, moveTask } = useApp();
-  const navigate = useNavigateCal();
+  const navigate = useNavigate();
   const weekStart = state.settings.weekStart;
   const nowJ = toJalaali(new Date());
   const [jy, setJy] = useState(nowJ.jy);
@@ -47,25 +41,32 @@ export default function Calendar() {
     [weekStart],
   );
 
+  const nowTs = useNow();
+
+  const allEvents = state.events;
+  const allTasks = state.tasks;
+
   const eventsByDay = useMemo(() => {
     const m = new Map<number, CalEvent[]>();
-    for (const e of state.events) {
+    for (const e of allEvents) {
       if (!m.has(e.day)) m.set(e.day, []);
       m.get(e.day)!.push(e);
     }
     for (const arr of m.values()) arr.sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
     return m;
-  }, [state.events]);
+  }, [allEvents]);
+
+  const refMap = useMemo(() => reflectionMap(state.reflections), [state.reflections]);
 
   const tasksByDay = useMemo(() => {
-    const m = new Map<number, typeof state.tasks>();
-    for (const t of state.tasks) {
+    const m = new Map<number, Task[]>();
+    for (const t of allTasks) {
       if (t.due == null) continue;
       if (!m.has(t.due)) m.set(t.due, []);
       m.get(t.due)!.push(t);
     }
     return m;
-  }, [state.tasks]);
+  }, [allTasks]);
 
   const shift = (d: number) => {
     const n = addMonthsJalali(jy, jm, d);
@@ -136,8 +137,8 @@ export default function Calendar() {
                 const isSel = startOfDay(sel) === cell.ts;
                 const jsDay = new Date(cell.ts).getDay();
                 const isWeekend = weekStart === 'sat' ? jsDay === 5 : jsDay === 4 || jsDay === 5;
-                const ref = (state.reflections ?? []).find((r) => r.day === cell.ts);
-                const score = ref?.score;
+                const ref = refMap.get(cell.ts);
+                const score = ref?.score ?? null;
                 return (
                   <motion.button
                     key={i}
@@ -173,8 +174,11 @@ export default function Calendar() {
                     )}
                     {score != null && (
                       <span className="tabular rounded-full bg-amber-500/15 px-1.5 text-[9px] font-black text-amber-600 dark:text-amber-300">
-                        ⭐{toFa(score)}
+                        ⭐ {formatScore(score)}
                       </span>
+                    )}
+                    {ref && score == null && (
+                      <span className="text-[8px] font-bold text-slate-400">بدون نمره</span>
                     )}
                     <span className="mt-1 hidden w-full space-y-1 sm:block">
                       {evs.slice(0, 2).map((e) => (
@@ -208,7 +212,8 @@ export default function Calendar() {
           <Card>
             <CardHead
               title={formatJalali(sel, { weekday: true })}
-              sub={`${toFa(selEvents.length)} رویداد • ${toFa(selTasks.length)} سررسید`}
+              sub={`${toFa(selEvents.length)} رویداد • ${toFa(selTasks.length)} سررسید • نمره: ${
+                refMap.get(sel)?.score != null ? `${formatScore(refMap.get(sel)?.score ?? null)} از ۱۰` : 'ثبت نشده'}`}
               action={<Btn size="sm" variant="soft" onClick={() => { setEdit(null); setShowM(true); }}><Plus size={14} /></Btn>}
             />
             <div className="max-h-[480px] space-y-2.5 overflow-y-auto px-5 pb-5">
@@ -222,7 +227,7 @@ export default function Calendar() {
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-extrabold text-slate-800 dark:text-slate-100">{e.title}</p>
                       <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                        {e.time && <span className="tabular inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-bold dark:bg-white/10"><Clock size={10} />{e.time}</span>}
+                        {e.time && <span className="tabular inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-bold dark:bg-white/10"><Clock size={10} />{clockToFa(e.time)}</span>}
                         {e.desc && <span>{e.desc}</span>}
                       </p>
                     </div>
@@ -243,7 +248,7 @@ export default function Calendar() {
                   </button>
                   <div className="min-w-0 flex-1">
                     <p className={cx('truncate text-[13px] font-bold', t.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200')}>{t.title}</p>
-                    <p className="text-[11px] text-slate-400">سررسید وظیفه {t.status !== 'done' && diffDays(t.due!, Date.now()) < 0 ? '• عقب‌افتاده' : ''}</p>
+                    <p className="text-[11px] text-slate-400">سررسید وظیفه {t.status !== 'done' && t.due != null && diffDays(t.due, nowTs) < 0 ? '• عقب‌افتاده' : ''}</p>
                   </div>
                 </div>
               ))}
@@ -278,7 +283,7 @@ export default function Calendar() {
                     <div key={e.id} className="flex items-center gap-2 rounded-xl border border-slate-100 px-2.5 py-2 dark:border-white/5">
                       <span className="h-6 w-1 rounded-full" style={{ background: e.color }} />
                       <span className="flex-1 truncate text-xs font-bold text-slate-700 dark:text-slate-200">{e.title}</span>
-                      {e.time && <span className="tabular text-[11px] text-slate-400">{e.time}</span>}
+                      {e.time && <span className="tabular text-[11px] text-slate-400">{clockToFa(e.time)}</span>}
                     </div>
                   ))}
                   {tasks.map((t) => (
@@ -300,11 +305,15 @@ export default function Calendar() {
 
       {/* راهنمای هیت‌مپ + مبدل تاریخ */}
       <Card>
-        <CardHead title="راهنمای رنگ خانه‌ها" sub="هیت‌مپ نمره روز + نسبت انجام تسک‌ها" />
+        <CardHead
+          title="راهنمای رنگ خانه‌ها"
+          sub="هیت‌مپ نمره روز (اعشاری) + نسبت انجام تسک‌ها"
+          action={<Btn size="sm" variant="soft" onClick={() => navigate('/insights')}>تحلیل و خلاصه روزها</Btn>}
+        />
         <div className="flex flex-wrap items-center gap-3 px-5 pb-5 text-[11px] text-slate-500">
-          <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded-md bg-emerald-500/25" /> نمره بالا (۸–۱۰)</span>
-          <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded-md bg-emerald-500/10" /> نمره متوسط (۴–۷)</span>
-          <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded-md bg-slate-100 dark:bg-white/10" /> بدون نمره</span>
+          <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded-md bg-emerald-500/25" /> نمره بالا (۸ تا ۱۰)</span>
+          <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded-md bg-emerald-500/10" /> نمره متوسط (۴ تا ۸)</span>
+          <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded-md bg-slate-100 dark:bg-white/10" /> بدون نمره / ثبت نشده</span>
           <span className="flex items-center gap-1.5">✅ نسبت انجام‌شده/کل تسک‌های آن روز زیر عدد روز</span>
           <span className="flex items-center gap-1.5">⭐ نمره ثبت‌شده روز</span>
         </div>
@@ -359,7 +368,7 @@ function Converter() {
         </select>
         <span className="text-slate-300">←</span>
         <span className="tabular rounded-xl bg-slate-100 px-4 py-2.5 text-[13px] font-black text-slate-700 dark:bg-white/10 dark:text-slate-100" dir="ltr">
-          {g ? `${g.getFullYear()}/${String(g.getMonth() + 1).padStart(2, '0')}/${String(g.getDate()).padStart(2, '0')}` : '—'}
+          {g ? toFa(`${g.getFullYear()}/${String(g.getMonth() + 1).padStart(2, '0')}/${String(g.getDate()).padStart(2, '0')}`) : '—'}
         </span>
         <span className="text-xs text-slate-400">
           {g ? `(${weekdayName(g.getTime())} • ${formatGregorian(g.getTime())})` : ''}

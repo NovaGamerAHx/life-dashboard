@@ -1,18 +1,16 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
-  AppState, Budget, CalEvent, DayReflection, Habit, MoneyUnit, Note, Task,
-  TaskCategory, TaskStatus, ThemeMode, Transaction,
+  AppState, CalEvent, DayReflection, Habit, Note, Task,
+  TaskCategory, TaskStatus, ThemeMode,
 } from './types';
+import { SCORE_MAX, SCORE_MIN } from './types';
 import { blankState, loadState, seedState, STORAGE_KEY } from './seed';
+import { normalizeClockText } from './jalali';
 import { uid } from './utils';
 import { getAutoBackup, listAutoBackups, maybeAutoSnapshot, type AutoBackupMeta } from './backup';
 
 interface AppContextValue {
   state: AppState;
-  // تراکنش
-  addTransaction: (t: Omit<Transaction, 'id' | 'createdAt'>) => void;
-  updateTransaction: (id: string, patch: Partial<Transaction>) => void;
-  deleteTransaction: (id: string) => void;
   // وظیفه
   addTask: (t: Omit<Task, 'id' | 'createdAt' | 'completedAt'>) => void;
   updateTask: (id: string, patch: Partial<Task>) => void;
@@ -31,28 +29,23 @@ interface AppContextValue {
   addNote: (n: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateNote: (id: string, patch: Partial<Note>) => void;
   deleteNote: (id: string) => void;
-  // بازتاب روز
+  // بازتاب روز و نمره
   saveReflection: (r: Omit<DayReflection, 'updatedAt'>) => void;
   deleteReflection: (day: number) => void;
+  /** ثبت سریع نمره روز (اعشار با یک رقم) — null برای پاک کردن نمره */
+  setDayScore: (day: number, score: number | null) => void;
   // دسته‌بندی وظایف
   addTaskCat: (name: string, color: string) => void;
   updateTaskCat: (id: string, patch: Partial<TaskCategory>) => void;
   deleteTaskCat: (id: string) => void;
-  // بودجه و دسته
-  setBudget: (b: Budget) => void;
-  deleteBudget: (category: string) => void;
-  addCategory: (kind: 'expense' | 'income', name: string) => boolean;
-  deleteCategory: (kind: 'expense' | 'income', name: string) => void;
   // تنظیمات
   setTheme: (t: ThemeMode) => void;
-  setUnit: (u: MoneyUnit) => void;
   setName: (name: string) => void;
-  setFinanceEnabled: (v: boolean) => void;
   setWeekStart: (v: 'sat' | 'mon') => void;
   setCalSystem: (v: 'jalali' | 'gregorian') => void;
   setHabitArchived: (id: string, archived: boolean) => void;
   // داده
-  importState: (s: AppState) => boolean;
+  importState: (s: unknown) => boolean;
   resetDemo: () => void;
   clearAll: () => void;
   // حافظه و پشتیبان خودکار
@@ -73,6 +66,13 @@ const num = (v: unknown): number | null =>
 const clampN = (v: number, lo: number, hi: number): number =>
   Math.min(hi, Math.max(lo, Math.round(v)));
 
+/** نمره روز: ۰ تا ۱۰ با یک رقم اعشار */
+export function normalizeScore(v: unknown): number | null {
+  const n = num(v);
+  if (n == null) return null;
+  return Math.round(Math.min(SCORE_MAX, Math.max(SCORE_MIN, n)) * 10) / 10;
+}
+
 function strArr(v: unknown, maxItems: number, maxLen: number): string[] {
   if (!Array.isArray(v)) return [];
   const out: string[] = [];
@@ -85,12 +85,23 @@ function strArr(v: unknown, maxItems: number, maxLen: number): string[] {
   return [...new Set(out)];
 }
 
-function sanitize(s: unknown): AppState | null {
+function clockOrUndef(v: unknown): string | undefined {
+  const raw = str(v, 8);
+  if (!raw) return undefined;
+  return normalizeClockText(raw) ?? undefined;
+}
+
+/**
+ * پاک‌سازی و مهاجرت داده ورودی.
+ * هر فایل پشتیبان یا داده‌ی ذخیره‌شده‌ای که ساختار قدیمی داشته باشد هم پذیرفته
+ * می‌شود؛ فیلدهای ناشناخته کنار گذاشته می‌شوند و بقیه بخش‌ها سالم منتقل می‌شوند.
+ */
+export function sanitize(s: unknown): AppState | null {
   if (!s || typeof s !== 'object') return null;
-  const o = s as Partial<AppState>;
+  const o = s as Record<string, unknown> & Partial<AppState>;
   if (o.version !== 1) return null;
-  if (!Array.isArray(o.transactions) || !Array.isArray(o.tasks) || !Array.isArray(o.events)) return null;
-  if (!Array.isArray(o.habits) || !Array.isArray(o.notes) || !Array.isArray(o.budgets)) return null;
+  if (!Array.isArray(o.tasks) || !Array.isArray(o.events)) return null;
+  if (!Array.isArray(o.habits) || !Array.isArray(o.notes)) return null;
   const base = blankState();
   const now = Date.now();
 
@@ -98,29 +109,9 @@ function sanitize(s: unknown): AppState | null {
   const rst = (o.settings ?? {}) as Partial<AppState['settings']>;
   const settings: AppState['settings'] = {
     theme: rst.theme === 'dark' || rst.theme === 'light' ? rst.theme : 'system',
-    unit: rst.unit === 'heazar' ? 'heazar' : 'toman',
-    financeEnabled: rst.financeEnabled === true,
     weekStart: rst.weekStart === 'mon' ? 'mon' : 'sat',
     calSystem: rst.calSystem === 'gregorian' ? 'gregorian' : 'jalali',
   };
-
-  const transactions: Transaction[] = [];
-  for (const t of o.transactions as Transaction[]) {
-    if (!t || typeof t.id !== 'string' || typeof t.title !== 'string') continue;
-    const amount = num(t.amount);
-    const date = num(t.date);
-    if (amount == null || amount < 0 || date == null) continue;
-    transactions.push({
-      id: t.id.slice(0, 60),
-      type: t.type === 'income' ? 'income' : 'expense',
-      amount: Math.round(amount),
-      category: str(t.category, 40) || 'سایر',
-      title: t.title.slice(0, 200),
-      note: str(t.note, 1000),
-      date,
-      createdAt: num(t.createdAt) ?? now,
-    });
-  }
 
   const tasks: Task[] = [];
   for (const t of o.tasks as Task[]) {
@@ -141,7 +132,7 @@ function sanitize(s: unknown): AppState | null {
       priority,
       tags: strArr(t.tags, 12, 40),
       due,
-      time: str(t.time, 8),
+      time: clockOrUndef(t.time),
       durationMin: num(t.durationMin) != null ? clampN(t.durationMin as number, 5, 1440) : 60,
       backlog: typeof t.backlog === 'boolean' ? t.backlog : due == null,
       urgent: typeof t.urgent === 'boolean' ? t.urgent : priority === 'high',
@@ -163,7 +154,7 @@ function sanitize(s: unknown): AppState | null {
       id: e.id.slice(0, 60),
       title: e.title.slice(0, 200),
       day,
-      time: str(e.time, 8) ?? '',
+      time: clockOrUndef(e.time) ?? '',
       color: str(e.color, 20) ?? '#10b981',
       desc: str(e.desc, 1000),
       createdAt: num(e.createdAt) ?? now,
@@ -185,9 +176,10 @@ function sanitize(s: unknown): AppState | null {
 
   // لاگ عادت‌ها: فقط کلیدهای رشته‌ای با مقدار truthy
   const habitLogs: Record<string, boolean> = {};
-  if (o.habitLogs && typeof o.habitLogs === 'object') {
+  const rawLogs = o.habitLogs;
+  if (rawLogs && typeof rawLogs === 'object') {
     let c = 0;
-    for (const [k, v] of Object.entries(o.habitLogs)) {
+    for (const [k, v] of Object.entries(rawLogs as Record<string, unknown>)) {
       if (v && typeof k === 'string' && k.length < 80) {
         habitLogs[k] = true;
         if (++c > 30000) break;
@@ -210,35 +202,29 @@ function sanitize(s: unknown): AppState | null {
     });
   }
 
-  const budgets: Budget[] = [];
-  for (const b of o.budgets as Budget[]) {
-    if (!b || typeof b.category !== 'string') continue;
-    const limit = num(b.limit);
-    if (limit == null || limit <= 0) continue;
-    budgets.push({ category: b.category.slice(0, 40), limit: Math.round(limit) });
-  }
-
   const reflections: DayReflection[] = [];
+  const seenDays = new Set<number>();
   if (Array.isArray(o.reflections)) {
     for (const r of o.reflections as DayReflection[]) {
-      if (!r || num(r.day) == null) continue;
+      const day = num(r?.day);
+      if (r == null || day == null || seenDays.has(day)) continue;
+      seenDays.add(day);
       const mood = num(r.mood);
-      const score = num(r.score);
       reflections.push({
-        day: r.day as number,
+        day,
         mood: mood === 1 || mood === 2 || mood === 3 || mood === 4 || mood === 5 ? mood : 3,
-        score: score != null ? clampN(score, 0, 10) : null,
-        wake: str(r.wake, 8),
-        sleep: str(r.sleep, 8),
+        score: normalizeScore(r.score),
+        wake: clockOrUndef(r.wake),
+        sleep: clockOrUndef(r.sleep),
         sport: r.sport === true ? true : undefined,
         sportType: str(r.sportType, 60),
         wentOut: r.wentOut === true ? true : undefined,
         outPlace: str(r.outPlace, 100),
-        dayNote: str(r.dayNote, 2000),
-        wins: str(r.wins, 3000) ?? '',
-        improve: str(r.improve, 1000),
-        lessons: str(r.lessons, 3000) ?? '',
-        gratitude: str(r.gratitude, 1000) ?? '',
+        dayNote: str(r.dayNote, 4000),
+        wins: str(r.wins, 4000) ?? '',
+        improve: str(r.improve, 2000),
+        lessons: str(r.lessons, 4000) ?? '',
+        gratitude: str(r.gratitude, 2000) ?? '',
         updatedAt: num(r.updatedAt) ?? now,
       });
     }
@@ -260,16 +246,12 @@ function sanitize(s: unknown): AppState | null {
     profile: { name: str((o.profile as { name?: unknown } | undefined)?.name, 60) ?? '' },
     settings,
     taskCats: taskCats.length > 0 ? taskCats : base.taskCats,
-    transactions: transactions.slice(0, 20000),
     tasks: tasks.slice(0, 10000),
     events: events.slice(0, 10000),
     habits: habits.slice(0, 200),
     habitLogs,
     notes: notes.slice(0, 5000),
-    budgets: budgets.slice(0, 100),
-    reflections: reflections.slice(0, 4000),
-    expenseCats: strArr(o.expenseCats, 60, 40),
-    incomeCats: strArr(o.incomeCats, 60, 40),
+    reflections: reflections.slice(0, 8000),
     seeded: true,
     createdAt: num(o.createdAt) ?? now,
   };
@@ -283,10 +265,7 @@ export function validateBackup(data: unknown): AppState | null {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(() => {
     const loaded = loadState();
-    if (loaded) {
-      // همه داده‌های ذخیره‌شده از مسیر sanitize عبور می‌کنند (مهاجرت + پاک‌سازی)
-      return sanitize(loaded) ?? seedState();
-    }
+    if (loaded) return sanitize(loaded) ?? seedState();
     return seedState();
   });
   const [storageWarn, setStorageWarn] = useState<string | null>(null);
@@ -364,12 +343,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppContextValue>(() => ({
     state,
-    addTransaction: (t) =>
-      setState((s) => ({ ...s, transactions: [{ ...t, id: uid('tx'), createdAt: Date.now() }, ...s.transactions] })),
-    updateTransaction: (id, patch) =>
-      setState((s) => ({ ...s, transactions: s.transactions.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
-    deleteTransaction: (id) =>
-      setState((s) => ({ ...s, transactions: s.transactions.filter((x) => x.id !== id) })),
 
     addTask: (t) =>
       setState((s) => ({
@@ -437,10 +410,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveReflection: (r) =>
       setState((s) => {
         const rest = (s.reflections ?? []).filter((x) => x.day !== r.day);
-        return { ...s, reflections: [...rest, { ...r, updatedAt: Date.now() }] };
+        const clean: DayReflection = {
+          ...r,
+          score: normalizeScore(r.score),
+          wake: clockOrUndef(r.wake),
+          sleep: clockOrUndef(r.sleep),
+          updatedAt: Date.now(),
+        };
+        const next = [...rest, clean].sort((a, b) => a.day - b.day);
+        return { ...s, reflections: next };
       }),
     deleteReflection: (day) =>
       setState((s) => ({ ...s, reflections: (s.reflections ?? []).filter((x) => x.day !== day) })),
+    setDayScore: (day, score) =>
+      setState((s) => {
+        const cur = (s.reflections ?? []).find((x) => x.day === day);
+        const clean = normalizeScore(score);
+        const rest = (s.reflections ?? []).filter((x) => x.day !== day);
+        const rec: DayReflection = cur
+          ? { ...cur, score: clean, updatedAt: Date.now() }
+          : {
+              day,
+              mood: 3,
+              score: clean,
+              wins: '',
+              lessons: '',
+              gratitude: '',
+              updatedAt: Date.now(),
+            };
+        return { ...s, reflections: [...rest, rec].sort((a, b) => a.day - b.day) };
+      }),
 
     addTaskCat: (name, color) =>
       setState((s) => ({
@@ -471,33 +470,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
       }),
 
-    setBudget: (b) =>
-      setState((s) => {
-        const rest = s.budgets.filter((x) => x.category !== b.category);
-        return { ...s, budgets: [...rest, b] };
-      }),
-    deleteBudget: (category) =>
-      setState((s) => ({ ...s, budgets: s.budgets.filter((x) => x.category !== category) })),
-    // بررسی تکراری‌بودن به‌صورت همگام از روی state تازه انجام می‌شود
-    // (خواندن نتیجه از داخل setState نادرست بود چون updater دیر اجرا می‌شود)
-    addCategory: (kind, name) => {
-      const n = name.trim();
-      if (!n) return false;
-      const key = kind === 'expense' ? 'expenseCats' : 'incomeCats';
-      if ((state[key] ?? []).includes(n)) return false;
-      setState((s) => ({ ...s, [key]: [...s[key], n] }));
-      return true;
-    },
-    deleteCategory: (kind, name) =>
-      setState((s) => {
-        const key = kind === 'expense' ? 'expenseCats' : 'incomeCats';
-        return { ...s, [key]: s[key].filter((c) => c !== name) };
-      }),
-
     setTheme: (theme) => setState((s) => ({ ...s, settings: { ...s.settings, theme } })),
-    setUnit: (unit) => setState((s) => ({ ...s, settings: { ...s.settings, unit } })),
     setName: (name) => setState((s) => ({ ...s, profile: { name } })),
-    setFinanceEnabled: (v) => setState((s) => ({ ...s, settings: { ...s.settings, financeEnabled: v } })),
     setWeekStart: (v) => setState((s) => ({ ...s, settings: { ...s.settings, weekStart: v } })),
     setCalSystem: (v) => setState((s) => ({ ...s, settings: { ...s.settings, calSystem: v } })),
     setHabitArchived: (id, archived) =>
@@ -523,7 +497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     autoBackups,
     restoreAutoBackup: (ts) => {
-      const raw = getAutoBackup(ts);
+      const raw = safeGetAutoBackup(ts);
       const clean = sanitize(raw);
       if (!clean) return false;
       setState(clean);
@@ -552,6 +526,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {children}
     </AppContext.Provider>
   );
+}
+
+/** خواندن اسنپ‌شات خودکار به‌صورت ایمن (بدون پرتاب خطا) */
+function safeGetAutoBackup(ts: number): unknown {
+  try {
+    return getAutoBackup(ts);
+  } catch {
+    return null;
+  }
 }
 
 export function useApp(): AppContextValue {

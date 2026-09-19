@@ -271,20 +271,134 @@ const EN_MONTHS = [
 ];
 export function formatGregorian(ts: number): string {
   const d = new Date(ts);
-  return `${d.getDate()} ${EN_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  // ارقام فارسی، هم‌سبک با بقیه برنامه
+  return toFa(`${d.getDate()} ${EN_MONTHS[d.getMonth()]} ${d.getFullYear()}`);
 }
 
-/** «HH:MM» → دقیقه از نیمه‌شب؛ نامعتبر → null */
-export function parseClock(t: string): number | null {
-  const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec((t ?? '').trim());
+/** جدول تبدیل ارقام و جداکننده‌های فارسی/عربی به معادل لاتین */
+const DIGIT_MAP: Record<string, string> = {
+  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+  '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+  '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+  '٫': '.', '٬': '', '،': ',', '：': ':',
+};
+
+/** ارقام و جداکننده‌های فارسی/عربی را به لاتین تبدیل می‌کند */
+export function normalizeDigits(input: string): string {
+  let out = '';
+  for (const ch of String(input ?? '')) out += DIGIT_MAP[ch] ?? ch;
+  return out;
+}
+
+/**
+ * هر ورودی ساعت را به شکل استاندارد ۲۴ساعته «HH:MM» درمی‌آورد.
+ * ورودی‌های پذیرفته‌شده: «۹:۳۰»، «09:30»، «9.30»، «23:59» و حداکثر یک رقم اعشار دقیقه.
+ * نامعتبر → null. هیچ‌جای برنامه ساعت ۱۲ساعته (AM/PM) پذیرفته یا نمایش داده نمی‌شود.
+ */
+export function normalizeClockText(raw: string): string | null {
+  const s = normalizeDigits(String(raw ?? ''))
+    .replace(/[\u200c\u200f\u200e]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[.:]/g, ':')
+    .replace(/h/gi, ':');
+  if (!s) return null;
+  const m = /^(\d{1,2}):(\d{1,2})$/.exec(s);
   if (!m) return null;
-  return Number(m[1]) * 60 + Number(m[2]);
+  const h = Number(m[1]);
+  const mi = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(mi)) return null;
+  if (h < 0 || h > 23 || mi < 0 || mi > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
 }
 
+/** «HH:MM» (با ارقام فارسی یا لاتین) → دقیقه از نیمه‌شب؛ نامعتبر → null */
+export function parseClock(t: string): number | null {
+  const norm = normalizeClockText(t);
+  if (!norm) return null;
+  const [h, m] = norm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/** «HH:MM» با ارقام فارسی و صفر پیشرو */
 export function formatClock(mins: number): string {
   const h = Math.floor(mins / 60) % 24;
   const m = mins % 60;
   return toFa(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+}
+
+/** همان formatClock ولی با ارقام لاتین (برای نام فایل، خروجی CSV و …) */
+export function formatClockLatin(mins: number): string {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** عدد ساعت را با ارقام لاتین می‌گیرد و «HH:MM» فارسی برمی‌گرداند */
+export function clockToFa(value: string): string {
+  const m = parseClock(value);
+  return m == null ? String(value ?? '') : formatClock(m);
+}
+
+/** نمایش نمره با یک رقم اعشار و ارقام فارسی: ۷٫۵ / ۸ */
+/** جداکننده اعشار فارسی «٫» — همه‌ی نمایش‌های اعشاری برنامه از این تابع می‌گذرند */
+export function faDecimalSep(digits: string): string {
+  return toFa(digits).replace('.', '\u066B');
+}
+
+/** نمایش نمره با یک رقم اعشار (مثل «۷٫۵») — نمره‌ندارد → «ثبت نشده» */
+export function formatScore(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return 'ثبت نشده';
+  const rounded = Math.round(n * 10) / 10;
+  const txt = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return faDecimalSep(txt);
+}
+
+/** نمایش عدد اعشاری (مثل میانگین) با یک رقم اعشار و ارقام فارسی */
+export function formatDecimal(n: number | null | undefined, digits = 1): string {
+  if (n == null || !Number.isFinite(n)) return '—';
+  return faDecimalSep(n.toFixed(digits));
+}
+
+// ── بازه‌های هفتگی و ماهانه (شمسی) ──────────────────────────
+/** 0 = شنبه … 6 = جمعه */
+export function startOfWeek(ts: number, weekStart: 'sat' | 'mon' = 'sat'): number {
+  const wd = persianWeekday(ts);
+  const offset = weekStart === 'sat' ? wd : (wd + 5) % 7; // دوشنبه‌آغاز یعنی شنبه انتهای هفته قبل
+  return addDays(startOfDay(ts), -offset);
+}
+
+/** بازه هفته (شروع و پایان، شامل روز پایانی) */
+export function weekRange(ts: number, weekStart: 'sat' | 'mon' = 'sat'): { start: number; end: number } {
+  const start = startOfWeek(ts, weekStart);
+  return { start, end: addDays(start, 6) };
+}
+
+/** بازه ماه شمسی شامل ts → {start, end} (ابتدای روز اول تا انتهای روز آخر) */
+export function jalaliMonthRange(ts: number): { start: number; end: number; jy: number; jm: number } {
+  const j = toJalaali(new Date(ts));
+  const start = startOfDay(toGregorian(j.jy, j.jm, 1).getTime());
+  const nextM = j.jm === 12 ? 1 : j.jm + 1;
+  const nextY = j.jm === 12 ? j.jy + 1 : j.jy;
+  const end = startOfDay(toGregorian(nextY, nextM, 1).getTime()) - 1;
+  return { start, end, jy: j.jy, jm: j.jm };
+}
+
+/** برچسب کوتاه یک بازه: «۱۴۰۵/۰۶/۲۷ تا ۱۴۰۵/۰۷/۰۲» */
+export function rangeLabel(start: number, end: number): string {
+  return `${formatJalaliShort(start)} تا ${formatJalaliShort(end)}`;
+}
+
+/** جمع تقویمی بازه‌های روزانه بین دو روز (شامل هر دو سر) */
+export function eachDay(start: number, end: number, max = 4000): number[] {
+  const out: number[] = [];
+  let cur = startOfDay(start);
+  const last = startOfDay(end);
+  while (cur <= last && out.length < max) {
+    out.push(cur);
+    cur = addDays(cur, 1);
+  }
+  return out;
 }
 
 export function relativeDayLabel(ts: number): string | null {

@@ -1,10 +1,11 @@
 # ─────────────────────────────────────────────────────────────
-# بیلد و استقرار خودکار روی GitHub Pages
+# بیلد و استقرار خودکار روی GitHub Pages + قابلیت دانلود آرتیفکت
 #
 # با هر push روی شاخه main (یا master):
 #   ۱) وابستگی‌ها با npm ci (بر اساس lock-file) نصب می‌شوند
 #   ۲) لینت و تایپ‌چک + بیلد پروداکشن اجرا می‌شود
-#   ۳) خروجی dist روی GitHub Pages مستقر می‌شود
+#   ۳) آرتیفکت زیپ‌شده‌ی پوشه dist برای دانلود مستقیم در تب Actions قرار می‌گیرد
+#   ۴) خروجی dist روی GitHub Pages مستقر می‌شود
 #
 # پیش‌نیاز (فقط یک بار): در تنظیمات ریپو
 #   Settings → Pages → Build and deployment → Source: "GitHub Actions"
@@ -54,10 +55,18 @@ jobs:
       - name: Add .nojekyll
         run: touch dist/.nojekyll
 
+      # آپلود آرتیفکت جهت دانلود مستقیم فایل‌های بیلد در تب Actions
+      - name: Upload build artifact for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: life-dashboard-dist
+          path: dist
+          retention-days: 30
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist

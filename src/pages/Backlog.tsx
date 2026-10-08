@@ -91,19 +91,19 @@ export default function Backlog() {
     <div className="space-y-5">
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 bg-gradient-to-l from-slate-700 to-slate-900 px-5 py-4 text-white">
-          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10"><Inbox size={22} /></span>
+          <span className="grid grid-cols-1 h-11 w-11 place-items-center rounded-2xl bg-white/10"><Inbox size={22} /></span>
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-black">بک‌لاگ — صندوق ایده‌ها و کارهای آینده</h2>
-            <p className="mt-0.5 text-[11px] text-slate-300">{toFa(openCount)} آیتم باز • هر وقت آماده شدی، زمان‌بندی‌اش کن</p>
+            <p className="mt-0.5 text-[11px] text-muted">{toFa(openCount)} آیتم باز • هر وقت آماده شدی، زمان‌بندی‌اش کن</p>
           </div>
-          <Btn onClick={() => { setEdit(null); setShowM(true); }} className="!bg-white !text-slate-800 hover:!bg-slate-100">
+          <Btn onClick={() => { setEdit(null); setShowM(true); }} className="!bg-surface !text-ink hover:!bg-surface-2">
             <Plus size={15} /> آیتم جدید
           </Btn>
         </div>
         <div className="flex flex-wrap items-center gap-2 px-5 py-3.5">
           <div className="flex min-w-[220px] flex-1 gap-2">
             <div className="relative flex-1">
-              <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جست‌وجو در بک‌لاگ…" className={cx(inputCls, 'pr-9')} />
             </div>
             <input
@@ -164,7 +164,7 @@ export default function Backlog() {
           />
         </Card>
       ) : (
-        <div className="grid items-start gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
           <AnimatePresence initial={false}>
             {items.map((t) => (
               <BacklogCard
@@ -191,16 +191,16 @@ export default function Backlog() {
         {scheduleId && schedTask && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[80] grid grid-cols-1 place-items-center bg-scrim p-4 backdrop-blur-sm"
             onMouseDown={(e) => { if (e.target === e.currentTarget) setScheduleId(null); }}
           >
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 14, scale: 0.97 }}
-              className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-0 shadow-2xl dark:border-white/10 dark:bg-slate-900"
+              className="w-full max-w-md rounded-3xl border border-line bg-surface p-0 shadow-2xl  "
             >
-              <div className="border-b border-slate-100 px-6 py-4 dark:border-white/5">
-                <h3 className="text-[15px] font-extrabold text-slate-900 dark:text-white">زمان‌بندی آیتم</h3>
-                <p className="mt-0.5 truncate text-xs text-slate-500">{schedTask.title}</p>
+              <div className="border-b border-line px-6 py-4 ">
+                <h3 className="text-[15px] font-extrabold text-ink ">زمان‌بندی آیتم</h3>
+                <p className="mt-0.5 truncate text-xs text-muted">{schedTask.title}</p>
               </div>
               <div className="space-y-3 px-6 py-5">
                 <div className="flex flex-wrap gap-1.5">
@@ -215,7 +215,7 @@ export default function Backlog() {
                       onClick={() => setSchedDay(o.d)}
                       className={cx(
                         'rounded-xl px-3 py-2 text-[11px] font-bold transition',
-                        schedDay === o.d ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300',
+                        schedDay === o.d ? 'bg-brand text-white' : 'bg-sunken text-muted hover:bg-sunken  ',
                       )}
                     >
                       {o.l}
@@ -224,7 +224,7 @@ export default function Backlog() {
                 </div>
                 <JalaliDateField value={schedDay} onChange={setSchedDay} allowClear={false} />
                 {schedDay != null && (
-                  <p className="text-[11px] text-slate-400">منتقل می‌شود به: <b>{formatJalali(schedDay, { weekday: true })}</b></p>
+                  <p className="text-[11px] text-muted">منتقل می‌شود به: <b>{formatJalali(schedDay, { weekday: true })}</b></p>
                 )}
                 <div className="flex justify-end gap-2">
                   <Btn variant="ghost" onClick={() => setScheduleId(null)}>انصراف</Btn>
@@ -253,10 +253,10 @@ function EisenMatrix({ items, dragId, setDragId, onToggle, onEdit, onDelete, onS
 }) {
   const { updateTask } = useApp();
   const quads: Array<{ imp: boolean; urg: boolean; title: string; sub: string; color: string; bg: string }> = [
-    { imp: true, urg: true, title: 'ربع ۱ • مهم و فوری', sub: 'همین حالا انجام بده', color: '#ef4444', bg: 'bg-rose-500/[0.05]' },
-    { imp: true, urg: false, title: 'ربع ۲ • مهم و غیرفوری', sub: 'برنامه‌ریزی کن', color: '#3b82f6', bg: 'bg-sky-500/[0.05]' },
-    { imp: false, urg: true, title: 'ربع ۳ • غیرمهم و فوری', sub: 'بسپار به دیگری', color: '#f59e0b', bg: 'bg-amber-500/[0.05]' },
-    { imp: false, urg: false, title: 'ربع ۴ • غیرمهم و غیرفوری', sub: 'حذف کن', color: '#94a3b8', bg: 'bg-slate-500/[0.05]' },
+    { imp: true, urg: true, title: 'ربع ۱ • مهم و فوری', sub: 'همین حالا انجام بده', color: '#ef4444', bg: 'bg-danger/[0.05]' },
+    { imp: true, urg: false, title: 'ربع ۲ • مهم و غیرفوری', sub: 'برنامه‌ریزی کن', color: '#3b82f6', bg: 'bg-info/[0.05]' },
+    { imp: false, urg: true, title: 'ربع ۳ • غیرمهم و فوری', sub: 'بسپار به دیگری', color: '#f59e0b', bg: 'bg-warn/[0.05]' },
+    { imp: false, urg: false, title: 'ربع ۴ • غیرمهم و غیرفوری', sub: 'حذف کن', color: '#94a3b8', bg: 'bg-muted/[0.05]' },
   ];
   const drop = (imp: boolean, urg: boolean) => {
     if (!dragId) return;
@@ -265,8 +265,8 @@ function EisenMatrix({ items, dragId, setDragId, onToggle, onEdit, onDelete, onS
   };
   return (
     <div>
-      <p className="mb-3 text-center text-[11px] text-slate-400">💡 کارت‌ها را بین ربع‌ها بکش و رها کن تا اهمیت/فوریت عوض شود</p>
-      <div className="grid items-start gap-3 md:grid-cols-2">
+      <p className="mb-3 text-center text-[11px] text-muted">💡 کارت‌ها را بین ربع‌ها بکش و رها کن تا اهمیت/فوریت عوض شود</p>
+      <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
         {quads.map((q) => {
           const list = items.filter((t) => {
             const e = eisenOf(t);
@@ -277,15 +277,15 @@ function EisenMatrix({ items, dragId, setDragId, onToggle, onEdit, onDelete, onS
               key={q.title}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => drop(q.imp, q.urg)}
-              className={cx('min-h-[180px] rounded-3xl border border-slate-200/60 p-3 dark:border-white/5', q.bg)}
+              className={cx('min-h-[180px] rounded-3xl border border-line p-3 ', q.bg)}
             >
               <div className="mb-2.5 flex items-center gap-2 px-1">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: q.color }} />
                 <div className="flex-1">
-                  <h3 className="text-[12px] font-black text-slate-700 dark:text-slate-200">{q.title}</h3>
-                  <p className="text-[10px] text-slate-400">{q.sub}</p>
+                  <h3 className="text-[12px] font-black text-ink-2 ">{q.title}</h3>
+                  <p className="text-[11px] text-muted">{q.sub}</p>
                 </div>
-                <span className="tabular rounded-full bg-slate-200/70 px-2 py-0.5 text-[11px] font-black text-slate-500 dark:bg-white/10 dark:text-slate-300">
+                <span className="num rounded-full bg-sunken px-2 py-0.5 text-[11px] font-black text-muted  ">
                   {toFa(list.length)}
                 </span>
               </div>
@@ -305,7 +305,7 @@ function EisenMatrix({ items, dragId, setDragId, onToggle, onEdit, onDelete, onS
                   />
                 ))}
                 {list.length === 0 && (
-                  <p className="rounded-2xl border border-dashed border-slate-200 py-5 text-center text-[11px] text-slate-400 dark:border-white/10">خالی — کارت را اینجا رها کن</p>
+                  <p className="rounded-2xl border border-dashed border-line py-5 text-center text-[11px] text-muted ">خالی — کارت را اینجا رها کن</p>
                 )}
               </div>
             </div>
@@ -333,8 +333,8 @@ function BacklogCard({ t, onToggle, onEdit, onDelete, onSchedule, draggable, dra
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className={cx(
-        'rounded-2xl border bg-white p-3.5 shadow-sm dark:bg-slate-900',
-        t.status === 'done' ? 'border-emerald-500/20' : 'border-slate-200/80 dark:border-white/10',
+        'rounded-2xl border bg-surface p-3.5 shadow-sm ',
+        t.status === 'done' ? 'border-brand/20' : 'border-line ',
       )}
     >
       <div className="flex items-start gap-2.5">
@@ -342,36 +342,36 @@ function BacklogCard({ t, onToggle, onEdit, onDelete, onSchedule, draggable, dra
           onClick={onToggle}
           className={cx(
             'mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 transition active:scale-90',
-            t.status === 'done' ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 hover:border-emerald-500 dark:border-white/20',
+            t.status === 'done' ? 'border-brand bg-brand text-white' : 'border-line-strong hover:border-brand ',
           )}
         >
           {t.status === 'done' && <CheckIcon />}
         </button>
         <div className="min-w-0 flex-1">
-          <p className={cx('text-[13px] font-extrabold leading-6', t.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-100')}>{t.title}</p>
+          <p className={cx('text-[13px] font-extrabold leading-6', t.status === 'done' ? 'text-muted line-through' : 'text-ink ')}>{t.title}</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
               style={{ background: eisenColor(e.important, e.urgent) }}
               title={eisenLabel(e.important, e.urgent)}
             >
               {e.important ? (e.urgent ? '🔴' : '🔵') : e.urgent ? '🟡' : '⚪'} ربع {e.important ? (e.urgent ? '۱' : '۲') : e.urgent ? '۳' : '۴'}
             </span>
-            <span className={cx('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold', pri.bg, pri.color)}>
+            <span className={cx('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold', pri.bg, pri.color)}>
               <Flag size={10} />{pri.label}
             </span>
             {t.deadline != null && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-300" title="ددلاین">
+              <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-bold text-danger-ink " title="ددلاین">
                 <Clock size={10} />ددلاین: {formatJalaliShort(t.deadline)}
               </span>
             )}
             {t.time && (
-              <span className="tabular inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-white/10 dark:text-slate-300" dir="ltr">
+              <span className="num inline-flex items-center gap-1 rounded-full bg-sunken px-2 py-0.5 text-[11px] font-bold text-muted  " dir="ltr">
                 {t.time}
               </span>
             )}
             {t.actualMin != null && (
-              <span className="tabular rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-300">
+              <span className="num rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand-ink ">
                 واقعی: {toFa(t.actualMin)} دقیقه
               </span>
             )}
@@ -382,7 +382,7 @@ function BacklogCard({ t, onToggle, onEdit, onDelete, onSchedule, draggable, dra
         </div>
       </div>
       {(t.desc || t.result || t.subtasks.length > 0) && (
-        <button onClick={() => setOpen((v) => !v)} className="mt-2 flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-emerald-600">
+        <button onClick={() => setOpen((v) => !v)} className="mt-2 flex items-center gap-1 text-[11px] font-bold text-muted hover:text-brand-ink">
           <motion.span animate={{ rotate: open ? 180 : 0 }}><ChevronDown size={13} /></motion.span>
           {open ? 'بستن جزئیات' : 'نمایش جزئیات'}
         </button>
@@ -391,11 +391,11 @@ function BacklogCard({ t, onToggle, onEdit, onDelete, onSchedule, draggable, dra
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="space-y-1.5 pt-2">
-              {t.desc && <p className="rounded-xl bg-slate-50 p-2.5 text-[11px] leading-6 text-slate-500 dark:bg-white/5 dark:text-slate-400">{t.desc}</p>}
-              {t.result && <p className="rounded-xl bg-emerald-500/5 p-2.5 text-[11px] leading-6 text-emerald-700 ring-1 ring-emerald-500/15 dark:text-emerald-300">📝 نتیجه: {t.result}</p>}
+              {t.desc && <p className="rounded-xl bg-surface-2 p-2.5 text-[11px] leading-6 text-muted  ">{t.desc}</p>}
+              {t.result && <p className="rounded-xl bg-brand/5 p-2.5 text-[11px] leading-6 text-brand-ink ring-1 ring-brand/15 ">📝 نتیجه: {t.result}</p>}
               {t.subtasks.map((s) => (
-                <p key={s.id} className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                  <Check size={12} className={s.done ? 'text-emerald-500' : 'text-slate-300'} />
+                <p key={s.id} className="flex items-center gap-1.5 text-[11px] text-muted">
+                  <Check size={12} className={s.done ? 'text-brand-ink' : 'text-muted'} />
                   <span className={s.done ? 'line-through opacity-60' : ''}>{s.title}</span>
                 </p>
               ))}
@@ -403,14 +403,14 @@ function BacklogCard({ t, onToggle, onEdit, onDelete, onSchedule, draggable, dra
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="mt-2.5 flex items-center justify-between border-t border-slate-50 pt-2 dark:border-white/5">
-        <button onClick={onSchedule} className="flex items-center gap-1 rounded-xl bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-black text-emerald-700 transition hover:bg-emerald-500/15 dark:text-emerald-300">
+      <div className="mt-2.5 flex items-center justify-between border-t border-line pt-2 ">
+        <button onClick={onSchedule} className="flex items-center gap-1 rounded-xl bg-brand/10 px-2.5 py-1.5 text-[11px] font-black text-brand-ink transition hover:bg-brand/15 ">
           <CalendarPlus size={13} /> زمان‌بندی
           <ArrowRight size={11} className="rotate-180" />
         </button>
         <div className="flex gap-0.5">
-          <button onClick={onEdit} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-sky-500/10 hover:text-sky-600" title="ویرایش"><Pencil size={13} /></button>
-          <button onClick={onDelete} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500" title="حذف"><Trash2 size={13} /></button>
+          <button onClick={onEdit} className="grid grid-cols-1 h-7 w-7 place-items-center rounded-lg text-muted hover:bg-info/10 hover:text-info-ink" title="ویرایش"><Pencil size={13} /></button>
+          <button onClick={onDelete} className="grid grid-cols-1 h-7 w-7 place-items-center rounded-lg text-muted hover:bg-danger/10 hover:text-danger-ink" title="حذف"><Trash2 size={13} /></button>
         </div>
       </div>
     </motion.div>

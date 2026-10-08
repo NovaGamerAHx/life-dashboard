@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-d
 import { AppProvider } from './lib/store';
 import { Shell, type QuickKind } from './components/Shell';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PageSkeleton } from './components/ui';
 import { EventModal, HabitModal, NoteModal, TaskModal } from './components/forms';
 
 // لود تنبل صفحات: باندل اولیه سبک‌تر و شروع سریع‌تر برنامه
@@ -18,18 +19,7 @@ const Reports = lazy(() => import('./pages/Reports'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 function PageLoader() {
-  return (
-    <div className="space-y-3" aria-label="در حال بارگذاری…" role="status">
-      <div className="shimmer-line h-32 rounded-3xl" />
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <div className="shimmer-line h-24 rounded-2xl" />
-        <div className="shimmer-line h-24 rounded-2xl" />
-        <div className="shimmer-line hidden h-24 rounded-2xl xl:block" />
-        <div className="shimmer-line hidden h-24 rounded-2xl xl:block" />
-      </div>
-      <div className="shimmer-line h-48 rounded-3xl" />
-    </div>
-  );
+  return <PageSkeleton />;
 }
 
 /** با هر تغییر مسیر، اسکرول به بالای صفحه برگردد (تجربه موبایل بهتر) */

@@ -68,8 +68,8 @@ export default function Reports() {
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-black text-slate-800 dark:text-white">گزارش زندگی 🌱</h2>
-            <p className="mt-0.5 text-[11px] text-slate-400">
+            <h2 className="text-lg font-black text-ink ">گزارش زندگی 🌱</h2>
+            <p className="mt-0.5 text-[11px] text-muted">
               بهره‌وری، عادت‌ها، حال روزانه، خواب و ورزش — {toFa(rangeN)} روز اخیر
             </p>
           </div>
@@ -94,26 +94,26 @@ export default function Reports() {
           icon={<Target size={19} />} label="میانگین انجام تسک‌ها"
           value={roll.avgTasksPct != null ? `${toFa(roll.avgTasksPct)}٪` : EMPTY_LABEL}
           sub={roll.taskDays ? `${toFa(roll.doneTasks)} از ${toFa(roll.totalTasks)} تسک` : 'تسکی در این بازه نبود'}
-          c="from-sky-500 to-blue-600"
+          c="from-sky-700 to-blue-700"
         />
         <Kpi
           icon={<Star size={19} />} label="میانگین نمره روز"
           value={s.avg != null ? `${formatScore(s.avg)} از ۱۰` : EMPTY_LABEL}
           delta={delta} invert={false}
           sub={s.count ? `${toFa(s.count)} روز دارای نمره • ${scoreGrade(s.avg)}` : 'نمره‌ای ثبت نشده'}
-          c="from-amber-500 to-orange-600"
+          c="from-amber-700 to-orange-700"
         />
         <Kpi
           icon={<Smile size={19} />} label="میانگین حال روزانه"
           value={roll.avgMood != null ? `${moodFace(Math.round(roll.avgMood))} ${formatScore(roll.avgMood)}` : EMPTY_LABEL}
           sub={roll.moodCount ? `${toFa(roll.moodCount)} روز ثبت‌شده از ۵` : 'حالی ثبت نشده'}
-          c="from-violet-500 to-purple-600"
+          c="from-violet-700 to-purple-700"
         />
         <Kpi
           icon={<Activity size={19} />} label="روزهای ورزش"
           value={`${toFa(roll.sportDays)} روز`}
           sub={roll.avgSleepMin != null ? `میانگین خواب ${formatDurationFa(roll.avgSleepMin)}` : 'خوابی ثبت نشده'}
-          c="from-emerald-500 to-teal-600"
+          c="from-emerald-700 to-teal-700"
         />
       </div>
 
@@ -158,8 +158,8 @@ export default function Reports() {
           )}
         </div>
         {/* نوار حال روزانه */}
-        <div className="border-t border-slate-100 px-5 py-4 dark:border-white/5">
-          <p className="mb-2 text-[11px] font-black text-slate-500">حال روزانه ({toFa(rangeN)} روز)</p>
+        <div className="border-t border-line px-5 py-4 ">
+          <p className="mb-2 text-[11px] font-black text-muted">حال روزانه ({toFa(rangeN)} روز)</p>
           <div className="flex gap-1 overflow-x-auto pb-1" dir="ltr">
             {stats.map((d) => (
               <div
@@ -167,7 +167,7 @@ export default function Reports() {
                 title={`${formatJalali(d.day)} — حال: ${d.mood != null ? moodFace(d.mood) : EMPTY_LABEL} • نمره: ${d.score != null ? formatScore(d.score) : EMPTY_LABEL}`}
                 className={cx(
                   'grid h-9 w-9 shrink-0 place-items-center rounded-lg border text-[13px]',
-                  d.mood == null ? 'border-slate-100 text-slate-300 dark:border-white/5 dark:text-slate-600' : 'border-transparent bg-violet-500/10',
+                  d.mood == null ? 'border-line text-muted  ' : 'border-transparent bg-violet/10',
                 )}
               >
                 {moodFace(d.mood)}
@@ -187,16 +187,16 @@ export default function Reports() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: Math.min(i * 0.07, 0.4) }}
-              className="flex items-start gap-2.5 rounded-2xl bg-violet-500/[0.06] px-3.5 py-3 text-[12px] leading-6 text-slate-600 ring-1 ring-violet-500/15 dark:text-slate-300"
+              className="flex items-start gap-2.5 rounded-2xl bg-violet/[0.06] px-3.5 py-3 text-[12px] leading-6 text-ink-2 ring-1 ring-violet/15 "
             >
-              <Lightbulb size={16} className="mt-0.5 shrink-0 text-violet-500" />
+              <Lightbulb size={16} className="mt-0.5 shrink-0 text-violet-ink" />
               {t}
             </motion.li>
           ))}
         </ul>
       </Card>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         {/* عادت‌ها */}
         <Card>
           <CardHead title={`عملکرد عادت‌ها (${toFa(rangeN)} روز)`} sub="نسبت انجام هر عادت در بازه" action={<Badge tone="slate">{toFa(roll.habitChecks)} ثبت از {toFa(roll.habitPossible)} فرصت</Badge>} />
@@ -214,15 +214,15 @@ export default function Reports() {
         </Card>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         {/* رکوردها */}
         <Card>
           <CardHead title="رکوردهای این بازه" sub="نکات برجسته" />
           <div className="grid grid-cols-2 gap-3 px-5 pb-5">
-            <Record icon={<Award size={18} />} label="بهترین روز" value={s.best ? formatJalali(s.best.day) : EMPTY_LABEL} sub={s.best ? `نمره ${formatScore(s.best.score!)} از ۱۰` : ''} c="bg-amber-500/10 text-amber-600" />
-            <Record icon={<Flame size={18} />} label="بهترین رشته نمره" value={streakDays.length > 1 ? `${toFa(streakDays.length)} روز` : EMPTY_LABEL} sub={streakDays.length > 1 ? 'نمره ۸ و بالاتر' : 'رشته‌ای ثبت نشده'} c="bg-orange-500/10 text-orange-600" />
-            <Record icon={<Star size={18} />} label="بالاترین نمره" value={s.max != null ? `${formatScore(s.max)} از ۱۰` : EMPTY_LABEL} sub={s.best ? formatJalali(s.best.day) : ''} c="bg-violet-500/10 text-violet-600" />
-            <Record icon={<BedDouble size={18} />} label="میانگین خواب" value={roll.avgSleepMin != null ? formatDurationFa(roll.avgSleepMin) : EMPTY_LABEL} sub={roll.sleepCount ? `${toFa(roll.sleepCount)} شب ثبت‌شده` : ''} c="bg-sky-500/10 text-sky-600" />
+            <Record icon={<Award size={18} />} label="بهترین روز" value={s.best ? formatJalali(s.best.day) : EMPTY_LABEL} sub={s.best ? `نمره ${formatScore(s.best.score!)} از ۱۰` : ''} c="bg-warn/10 text-warn-ink" />
+            <Record icon={<Flame size={18} />} label="بهترین رشته نمره" value={streakDays.length > 1 ? `${toFa(streakDays.length)} روز` : EMPTY_LABEL} sub={streakDays.length > 1 ? 'نمره ۸ و بالاتر' : 'رشته‌ای ثبت نشده'} c="bg-warn/10 text-warn-ink" />
+            <Record icon={<Star size={18} />} label="بالاترین نمره" value={s.max != null ? `${formatScore(s.max)} از ۱۰` : EMPTY_LABEL} sub={s.best ? formatJalali(s.best.day) : ''} c="bg-violet/10 text-violet-ink" />
+            <Record icon={<BedDouble size={18} />} label="میانگین خواب" value={roll.avgSleepMin != null ? formatDurationFa(roll.avgSleepMin) : EMPTY_LABEL} sub={roll.sleepCount ? `${toFa(roll.sleepCount)} شب ثبت‌شده` : ''} c="bg-info/10 text-info-ink" />
           </div>
         </Card>
 
@@ -230,10 +230,10 @@ export default function Reports() {
         <Card>
           <CardHead title="پراکندگی و پایداری" sub="نمره‌های ثبت‌شده در این بازه" />
           <div className="grid grid-cols-2 gap-3 px-5 pb-5">
-            <Record icon={<TrendingUp size={18} />} label="میانه نمره" value={s.median != null ? formatScore(s.median) : EMPTY_LABEL} sub={s.count ? `از ${toFa(s.count)} روز` : ''} c="bg-emerald-500/10 text-emerald-600" />
-            <Record icon={<TrendingDown size={18} />} label="نوسان (انحراف معیار)" value={s.std != null ? formatScore(s.std) : EMPTY_LABEL} sub={s.std != null ? (s.std < 1.5 ? 'پایدار 👍' : s.std < 2.5 ? 'متوسط' : 'نوسان زیاد') : ''} c="bg-rose-500/10 text-rose-600" />
-            <Record icon={<Award size={18} />} label="روزهای عالی" value={`${toFa(s.greatDays)} روز`} sub="نمره ۸ و بالاتر" c="bg-lime-500/10 text-lime-600" />
-            <Record icon={<TrendingDown size={18} />} label="روزهای ضعیف" value={`${toFa(s.lowDays)} روز`} sub="نمره کمتر از ۵" c="bg-slate-500/10 text-slate-500" />
+            <Record icon={<TrendingUp size={18} />} label="میانه نمره" value={s.median != null ? formatScore(s.median) : EMPTY_LABEL} sub={s.count ? `از ${toFa(s.count)} روز` : ''} c="bg-brand/10 text-brand-ink" />
+            <Record icon={<TrendingDown size={18} />} label="نوسان (انحراف معیار)" value={s.std != null ? formatScore(s.std) : EMPTY_LABEL} sub={s.std != null ? (s.std < 1.5 ? 'پایدار 👍' : s.std < 2.5 ? 'متوسط' : 'نوسان زیاد') : ''} c="bg-danger/10 text-danger-ink" />
+            <Record icon={<Award size={18} />} label="روزهای عالی" value={`${toFa(s.greatDays)} روز`} sub="نمره ۸ و بالاتر" c="bg-brand/10 text-brand-ink" />
+            <Record icon={<TrendingDown size={18} />} label="روزهای ضعیف" value={`${toFa(s.lowDays)} روز`} sub="نمره کمتر از ۵" c="bg-muted/10 text-muted" />
           </div>
         </Card>
       </div>
@@ -257,26 +257,26 @@ function Kpi({ icon, label, value, delta, sub, c }: { icon: React.ReactNode; lab
       <div className="mb-2.5 flex items-start justify-between">
         <span className={cx('grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-lg', c)}>{icon}</span>
         {delta != null && (
-          <span className={cx('flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black', delta >= 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-500')}>
+          <span className={cx('flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black', delta >= 0 ? 'bg-brand/10 text-brand-ink' : 'bg-danger/10 text-danger-ink')}>
             {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
             {formatScore(Math.abs(delta))}
           </span>
         )}
       </div>
-      <p className="text-[11px] font-bold text-slate-400">{label}</p>
-      <p className="tabular mt-1 text-[17px] font-black text-slate-800 dark:text-white">{value}</p>
-      <p className="mt-0.5 text-[11px] text-slate-400">{sub}</p>
+      <p className="text-[11px] font-bold text-muted">{label}</p>
+      <p className="num mt-1 text-[17px] font-black text-ink ">{value}</p>
+      <p className="mt-0.5 text-[11px] text-muted">{sub}</p>
     </Card>
   );
 }
 
 function Record({ icon, label, value, sub, c }: { icon: React.ReactNode; label: string; value: string; sub: string; c: string }) {
   return (
-    <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+    <div className="rounded-2xl border border-line p-3.5 ">
       <span className={cx('mb-2 grid h-9 w-9 place-items-center rounded-xl', c)}>{icon}</span>
-      <p className="text-[11px] font-bold text-slate-400">{label}</p>
-      <p className="tabular mt-0.5 truncate text-[15px] font-black text-slate-800 dark:text-white">{value}</p>
-      {sub && <p className="mt-0.5 truncate text-[11px] text-slate-400">{sub}</p>}
+      <p className="text-[11px] font-bold text-muted">{label}</p>
+      <p className="num mt-0.5 truncate text-[15px] font-black text-ink ">{value}</p>
+      {sub && <p className="mt-0.5 truncate text-[11px] text-muted">{sub}</p>}
     </div>
   );
 }
@@ -302,13 +302,13 @@ function HabitsReport({ days }: { days: DayStat[] }) {
         <li key={r.h.id}>
           <div className="mb-1.5 flex items-center gap-2">
             <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: r.h.color }} />
-            <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{r.h.title}</span>
-            <span className="tabular shrink-0 text-[11px] font-black text-slate-500">
+            <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-ink-2 ">{r.h.title}</span>
+            <span className="num shrink-0 text-[11px] font-black text-muted">
               {toFa(r.done)} از {toFa(days.length)} روز ({toFa(r.pct)}٪)
             </span>
           </div>
           <Progress value={r.pct} color={r.h.color} h={7} />
-          <p className="mt-1 text-[10px] text-slate-400">
+          <p className="mt-1 text-[11px] text-muted">
             استریک فعلی: {r.streak > 0 ? `${toFa(r.streak)} روز` : EMPTY_LABEL} • این هفته: {toFa(r.week)} بار
           </p>
         </li>
@@ -327,33 +327,33 @@ function SleepSport({ days }: { days: DayStat[] }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <MiniBox icon={<BedDouble size={16} />} label="میانگین خواب" value={avg != null ? formatDurationFa(avg) : EMPTY_LABEL} c="text-sky-500" />
-        <MiniBox icon={<Activity size={16} />} label="روزهای ورزش" value={`${toFa(sportDays.length)} روز`} c="text-emerald-500" />
-        <MiniBox icon={<MoonStar size={16} />} label="بیرون رفتن" value={`${toFa(outDays.length)} روز`} c="text-violet-500" />
+        <MiniBox icon={<BedDouble size={16} />} label="میانگین خواب" value={avg != null ? formatDurationFa(avg) : EMPTY_LABEL} c="text-info-ink" />
+        <MiniBox icon={<Activity size={16} />} label="روزهای ورزش" value={`${toFa(sportDays.length)} روز`} c="text-brand-ink" />
+        <MiniBox icon={<MoonStar size={16} />} label="بیرون رفتن" value={`${toFa(outDays.length)} روز`} c="text-violet-ink" />
       </div>
 
       {sleeps.length === 0 ? (
-        <p className="rounded-2xl bg-slate-50 py-4 text-center text-xs text-slate-400 dark:bg-white/5">
+        <p className="rounded-2xl bg-surface-2 py-4 text-center text-xs text-muted ">
           ساعتی برای خواب/بیداری ثبت نشده — از «اطلاعات پایه روز» در صفحه روز جاری وارد کن.
         </p>
       ) : (
         <div className="space-y-2">
-          <p className="text-[11px] font-black text-slate-500">مدت خواب هر شب</p>
+          <p className="text-[11px] font-black text-muted">مدت خواب هر شب</p>
           {sleeps.slice(-12).map((d) => {
             const mins = d.sleepMin ?? 0;
             const pct = Math.min(100, Math.round((mins / (12 * 60)) * 100));
             const tone = mins < 390 ? '#f59e0b' : mins <= 570 ? '#10b981' : '#0ea5e9';
             return (
               <div key={d.day} className="flex items-center gap-2.5">
-                <span className="tabular w-16 shrink-0 text-[11px] font-bold text-slate-400">{formatJalali(d.day)}</span>
-                <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+                <span className="num w-16 shrink-0 text-[11px] font-bold text-muted">{formatJalali(d.day)}</span>
+                <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-sunken ">
                   <span className="block h-full rounded-full" style={{ width: `${pct}%`, background: tone }} />
                 </span>
-                <span className="tabular w-24 shrink-0 text-left text-[11px] font-black text-slate-500">{formatDurationFa(mins)}</span>
+                <span className="num w-24 shrink-0 text-left text-[11px] font-black text-muted">{formatDurationFa(mins)}</span>
               </div>
             );
           })}
-          <p className="pt-1 text-[10px] text-slate-400">
+          <p className="pt-1 text-[11px] text-muted">
             خواب و بیداری هر روز با ساعت ۲۴ ساعته ثبت می‌شود (مثلاً ۲۳:۳۰ تا ۰۷:۰۰).
           </p>
         </div>
@@ -364,10 +364,10 @@ function SleepSport({ days }: { days: DayStat[] }) {
 
 function MiniBox({ icon, label, value, c }: { icon: React.ReactNode; label: string; value: string; c: string }) {
   return (
-    <div className="rounded-2xl border border-slate-100 p-3 text-center dark:border-white/5">
-      <span className={cx('mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-xl bg-slate-50 dark:bg-white/5', c)}>{icon}</span>
-      <p className="text-[10px] font-bold text-slate-400">{label}</p>
-      <p className="tabular mt-0.5 truncate text-xs font-black text-slate-700 dark:text-slate-200">{value}</p>
+    <div className="rounded-2xl border border-line p-3 text-center ">
+      <span className={cx('mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-xl bg-surface-2 ', c)}>{icon}</span>
+      <p className="text-[11px] font-bold text-muted">{label}</p>
+      <p className="num mt-0.5 truncate text-xs font-black text-ink-2 ">{value}</p>
     </div>
   );
 }
@@ -383,19 +383,19 @@ function ReflectionsTimeline({ days }: { days: DayStat[] }) {
       {items.map((d, i) => (
         <div key={d.day} className="relative flex gap-3 pb-4 pr-5">
           <span className="absolute right-[5px] top-2 h-2.5 w-2.5 rounded-full" style={{ background: scoreHeatClass(d.score).includes('rose') ? '#f43f5e' : '#10b981' }} />
-          {i < items.length - 1 && <span className="absolute bottom-0 right-[9px] top-4 w-0.5 bg-slate-100 dark:bg-white/10" />}
+          {i < items.length - 1 && <span className="absolute bottom-0 right-[9px] top-4 w-0.5 bg-sunken " />}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[12px] font-black text-slate-700 dark:text-slate-200">{formatJalali(d.day, { weekday: true })}</span>
+              <span className="text-[12px] font-black text-ink-2 ">{formatJalali(d.day, { weekday: true })}</span>
               <span className="text-base">{moodFace(d.mood)}</span>
-              <span className={cx('tabular rounded-full px-2 py-0.5 text-[10px] font-black', d.score != null ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300' : 'bg-slate-100 text-slate-400 dark:bg-white/10')}>
+              <span className={cx('num rounded-full px-2 py-0.5 text-[11px] font-black', d.score != null ? 'bg-warn/10 text-warn-ink ' : 'bg-sunken text-muted ')}>
                 {d.score != null ? `نمره ${formatScore(d.score)}` : EMPTY_LABEL}
               </span>
               {d.sport && <Badge tone="green">🏃 ورزش</Badge>}
               {d.wentOut && <Badge tone="violet">🚶 بیرون</Badge>}
             </div>
-            <div className="mt-1.5 space-y-1 text-[11px] leading-6 text-slate-500 dark:text-slate-400">
-              {d.dayNote?.trim() ? <p>📝 {d.dayNote.trim()}</p> : <p className="text-slate-300 dark:text-slate-600">📝 {EMPTY_LABEL}</p>}
+            <div className="mt-1.5 space-y-1 text-[11px] leading-6 text-muted ">
+              {d.dayNote?.trim() ? <p>📝 {d.dayNote.trim()}</p> : <p className="text-muted ">📝 {EMPTY_LABEL}</p>}
               {d.wins.trim() && <p>🏆 {d.wins.trim()}</p>}
               {d.improve?.trim() && <p>🔧 {d.improve.trim()}</p>}
               {d.lessons.trim() && <p>💡 {d.lessons.trim()}</p>}

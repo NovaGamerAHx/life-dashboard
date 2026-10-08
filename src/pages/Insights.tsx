@@ -166,7 +166,7 @@ export default function Insights() {
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-emerald-500/10 px-4 py-2.5 text-[12px] font-bold text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-300"
+          className="rounded-2xl bg-brand/10 px-4 py-2.5 text-[12px] font-bold text-brand-ink ring-1 ring-brand/20 "
         >
           {flash}
         </motion.div>
@@ -175,12 +175,12 @@ export default function Insights() {
       {/* ── انتخاب بازه ───────────────────────────────────── */}
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-600/20">
+          <span className="grid grid-cols-1 h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-700 to-teal-700 text-white shadow-md shadow-brand/20">
             <Gauge size={19} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-black text-slate-800 dark:text-white">تحلیل روزها</h2>
-            <p className="text-[11px] text-slate-400">
+            <h2 className="text-[15px] font-black text-ink ">تحلیل روزها</h2>
+            <p className="text-[11px] text-muted">
               {range.label} • {toFa(range.days.length)} روز • از {formatJalali(range.from)} تا {formatJalali(range.to)}
             </p>
           </div>
@@ -192,20 +192,20 @@ export default function Insights() {
           </Btn>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-white/5">
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3 ">
           <Segmented
             value={preset}
             onChange={(v) => setPreset(v)}
             options={PRESETS.map((p) => ({ v: p.v, label: p.label }))}
           />
           {preset === 'custom' && (
-            <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
+            <div className="grid grid-cols-1 w-full gap-3 sm:w-auto sm:grid-cols-2">
               <div className="min-w-[220px]">
-                <span className="mb-1 block text-[11px] font-bold text-slate-500">از تاریخ</span>
+                <span className="mb-1 block text-[11px] font-bold text-muted">از تاریخ</span>
                 <JalaliDateField value={customFrom} onChange={(v) => v != null && setCustomFrom(v)} allowClear={false} />
               </div>
               <div className="min-w-[220px]">
-                <span className="mb-1 block text-[11px] font-bold text-slate-500">تا تاریخ</span>
+                <span className="mb-1 block text-[11px] font-bold text-muted">تا تاریخ</span>
                 <JalaliDateField value={customTo} onChange={(v) => v != null && setCustomTo(v)} allowClear={false} />
               </div>
             </div>
@@ -213,7 +213,7 @@ export default function Insights() {
         </div>
 
         {sinceLast != null && sinceLast >= 3 && (
-          <p className="mt-3 flex items-center gap-1.5 rounded-2xl bg-amber-500/[0.07] px-3.5 py-2.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-500/20 dark:text-amber-300">
+          <p className="mt-3 flex items-center gap-1.5 rounded-2xl bg-warn/[0.07] px-3.5 py-2.5 text-[11px] font-bold text-warn-ink ring-1 ring-warn/20 ">
             <Info size={14} /> {toFa(sinceLast)} روز از آخرین نمره ثبت‌شده گذشته — «بازتاب پایان روز» را در صفحه روز جاری بنویس.
           </p>
         )}
@@ -223,7 +223,7 @@ export default function Insights() {
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Kpi
           icon={<Star size={19} />}
-          c="from-amber-500 to-orange-600"
+          c="from-amber-700 to-orange-700"
           label="میانگین نمره"
           value={s.avg != null ? `${formatScore(s.avg)} از ۱۰` : EMPTY_LABEL}
           sub={
@@ -235,21 +235,21 @@ export default function Insights() {
         />
         <Kpi
           icon={<ListChecks size={19} />}
-          c="from-sky-500 to-blue-600"
+          c="from-sky-700 to-blue-700"
           label="روزهای نمره‌دار"
           value={`${toFa(s.count)} از ${toFa(range.days.length)} روز`}
           sub={range.days.length ? `${toFa(Math.round((s.count / range.days.length) * 100))}٪ روزهای بازه` : 'بازه خالی است'}
         />
         <Kpi
           icon={<Award size={19} />}
-          c="from-emerald-500 to-teal-600"
+          c="from-emerald-700 to-teal-700"
           label="بهترین روز"
           value={s.best && s.max != null ? formatScore(s.max) : EMPTY_LABEL}
           sub={s.best ? formatJalali(s.best.day, { weekday: true }) : 'نمره‌ای ثبت نشده'}
         />
         <Kpi
           icon={<TrendingDown size={19} />}
-          c="from-rose-500 to-pink-600"
+          c="from-rose-700 to-pink-700"
           label="ضعیف‌ترین روز"
           value={s.worst && s.min != null ? formatScore(s.min) : EMPTY_LABEL}
           sub={s.worst ? formatJalali(s.worst.day, { weekday: true }) : 'نمره‌ای ثبت نشده'}
@@ -259,28 +259,28 @@ export default function Insights() {
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Kpi
           icon={<Smile size={19} />}
-          c="from-violet-500 to-purple-600"
+          c="from-violet-700 to-purple-700"
           label="میانگین حال روز"
           value={roll.avgMood != null ? `${formatScore(roll.avgMood)} از ۵` : EMPTY_LABEL}
           sub={roll.moodCount ? `${toFa(roll.moodCount)} روز ثبت‌شده • ${moodFace(Math.round(roll.avgMood ?? 0))}` : 'حالی ثبت نشده'}
         />
         <Kpi
           icon={<Target size={19} />}
-          c="from-teal-500 to-emerald-600"
+          c="from-teal-700 to-emerald-700"
           label="میانگین انجام تسک‌ها"
           value={roll.avgTasksPct != null ? `${toFa(roll.avgTasksPct)}٪` : EMPTY_LABEL}
           sub={`${toFa(roll.doneTasks)} از ${toFa(roll.totalTasks)} تسک در بازه`}
         />
         <Kpi
           icon={<Activity size={19} />}
-          c="from-lime-500 to-green-600"
+          c="from-lime-700 to-green-700"
           label="روزهای ورزش"
           value={`${toFa(roll.sportDays)} روز`}
           sub={`بیرون رفتن: ${toFa(roll.outDays)} روز`}
         />
         <Kpi
           icon={<BedDouble size={19} />}
-          c="from-indigo-500 to-blue-700"
+          c="from-indigo-700 to-blue-700"
           label="میانگین خواب"
           value={roll.avgSleepMin != null ? formatDurationFa(roll.avgSleepMin) : EMPTY_LABEL}
           sub={roll.sleepCount ? `${toFa(roll.sleepCount)} شب ثبت‌شده` : 'ساعت خواب ثبت نشده'}
@@ -310,7 +310,7 @@ export default function Insights() {
             }))}
           />
         </div>
-        <div className="grid gap-3 border-t border-slate-100 px-5 py-4 text-center sm:grid-cols-4 dark:border-white/5">
+        <div className="grid grid-cols-1 gap-3 border-t border-line px-5 py-4 text-center sm:grid-cols-4 ">
           <MiniStat label="میانه نمره‌ها" value={s.median != null ? formatScore(s.median) : EMPTY} />
           <MiniStat label="نوسان (انحراف معیار)" value={s.std != null ? formatScore(s.std) : EMPTY} hint="کمتر = روزهای پایدارتر" />
           <MiniStat label="روزهای عالی (۸ به بالا)" value={toFa(s.greatDays)} hint={streakDays.length > 1 ? `بهترین رشته: ${toFa(streakDays.length)} روز پیاپی` : 'رشته‌ای ثبت نشده'} />
@@ -325,13 +325,13 @@ export default function Insights() {
           sub="رنگ خانه‌ها شدت نمره است • کلیک = انتخاب/حذف برای خروجی • دابل‌کلیک = جزئیات کامل روز"
           action={
             <div className="flex items-center gap-1.5">
-              <button onClick={() => shiftCal(-1)} title="ماه قبل" className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
+              <button onClick={() => shiftCal(-1)} title="ماه قبل" className="grid grid-cols-1 h-9 w-9 place-items-center rounded-xl border border-line transition hover:bg-surface-2  ">
                 <ChevronRight size={17} />
               </button>
-              <span className="min-w-[110px] text-center text-[13px] font-black text-slate-700 dark:text-slate-200">
+              <span className="min-w-[110px] text-center text-[13px] font-black text-ink-2 ">
                 {J_MONTHS[calJ.jm - 1]} {toFa(calJ.jy)}
               </span>
-              <button onClick={() => shiftCal(1)} title="ماه بعد" className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
+              <button onClick={() => shiftCal(1)} title="ماه بعد" className="grid grid-cols-1 h-9 w-9 place-items-center rounded-xl border border-line transition hover:bg-surface-2  ">
                 <ChevronLeft size={17} />
               </button>
             </div>
@@ -340,7 +340,7 @@ export default function Insights() {
         <div className="px-4 pb-4">
           <div className="grid grid-cols-7 gap-1">
             {calWeekLabels.map((w, i) => (
-              <div key={w + i} className={cx('py-1.5 text-center text-[11px] font-black', (weekStart === 'sat' ? i === 6 : i === 5) ? 'text-rose-400' : 'text-slate-400')}>
+              <div key={w + i} className={cx('py-1.5 text-center text-[11px] font-black', (weekStart === 'sat' ? i === 6 : i === 5) ? 'text-danger-ink' : 'text-muted')}>
                 {w}
               </div>
             ))}
@@ -364,32 +364,32 @@ export default function Insights() {
                   className={cx(
                     'relative flex min-h-[62px] flex-col items-center justify-start gap-0.5 rounded-2xl border p-1 transition-all sm:min-h-[76px]',
                     isSel
-                      ? 'border-emerald-500 ring-2 ring-emerald-500/40'
+                      ? 'border-brand ring-2 ring-brand/40'
                       : cell.isToday
-                        ? 'border-emerald-400/70'
-                        : 'border-transparent hover:border-slate-200 dark:hover:border-white/10',
+                        ? 'border-brand/70'
+                        : 'border-transparent hover:border-line-strong ',
                     !cell.inMonth && 'opacity-30',
-                    score != null && cell.inMonth ? scoreHeatClass(score) : 'bg-white dark:bg-transparent',
+                    score != null && cell.inMonth ? scoreHeatClass(score) : 'bg-surface dark:bg-transparent',
                   )}
                 >
                   <span className={cx(
-                    'tabular grid h-6 w-6 place-items-center rounded-full text-[12px] font-black',
+                    'num grid h-6 w-6 place-items-center rounded-full text-[12px] font-black',
                     cell.isToday
-                      ? 'bg-emerald-500 text-white'
-                      : isHoliday && cell.inMonth ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300',
+                      ? 'bg-brand text-white'
+                      : isHoliday && cell.inMonth ? 'text-danger-ink' : 'text-ink-2 ',
                   )}>
                     {toFa(cell.jd)}
                   </span>
                   {score != null ? (
-                    <span className="tabular rounded-full bg-white/70 px-1.5 text-[10px] font-black text-slate-700 dark:bg-slate-900/70 dark:text-slate-100">
+                    <span className="num rounded-full bg-surface/70 px-1.5 text-[11px] font-black text-ink-2  ">
                       {formatScore(score)}
                     </span>
                   ) : cell.inMonth ? (
-                    <span className="text-[9px] font-bold text-slate-300 dark:text-slate-600">—</span>
+                    <span className="text-[9px] font-bold text-muted ">—</span>
                   ) : null}
-                  {st?.mood != null && <span className="text-[10px] leading-none">{moodFace(st.mood)}</span>}
+                  {st?.mood != null && <span className="text-[11px] leading-none">{moodFace(st.mood)}</span>}
                   {isSel && (
-                    <span className="absolute -top-1 left-1 grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-white">
+                    <span className="absolute -top-1 left-1 grid grid-cols-1 h-4 w-4 place-items-center rounded-full bg-brand text-white">
                       <CheckIcon size={10} />
                     </span>
                   )}
@@ -397,7 +397,7 @@ export default function Insights() {
               );
             })}
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted">
             <span className="flex items-center gap-1.5 font-bold">راهنمای رنگ نمره:</span>
             {SCORE_LEGEND.map((l) => (
               <span key={l.label} className="flex items-center gap-1.5">
@@ -405,14 +405,14 @@ export default function Insights() {
               </span>
             ))}
             <span className="flex items-center gap-1.5">
-              <span className="h-3.5 w-3.5 rounded-md border border-emerald-400" /> امروز
+              <span className="h-3.5 w-3.5 rounded-md border border-brand" /> امروز
             </span>
           </div>
         </div>
       </Card>
 
       {/* ── توزیع‌ها ─────────────────────────────────────── */}
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <Card>
           <CardHead title="توزیع نمره‌ها" sub={`${toFa(s.count)} روز نمره‌دار در ${range.label}`} />
           <div className="px-5 pb-5">
@@ -436,11 +436,11 @@ export default function Insights() {
       </div>
 
       {/* ── بازه‌های هفتگی و ماهانه ───────────────────────── */}
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <Card>
           <CardHead title="میانگین هفتگی" sub="بر اساس هفته‌های شمسی (شنبه/دوشنبه بر اساس تنظیمات)" />
           <div className="space-y-2.5 px-5 pb-5">
-            {weeks.length === 0 && <p className="rounded-2xl bg-slate-50 py-4 text-center text-xs text-slate-400 dark:bg-white/5">داده‌ای نیست</p>}
+            {weeks.length === 0 && <p className="rounded-2xl bg-surface-2 py-4 text-center text-xs text-muted ">داده‌ای نیست</p>}
             {weeks.map((w) => (
               <PeriodRow
                 key={w.key}
@@ -457,7 +457,7 @@ export default function Insights() {
         <Card>
           <CardHead title="میانگین ماهانه" sub="ماه‌های شمسی موجود در بازه" />
           <div className="space-y-2.5 px-5 pb-5">
-            {months.length === 0 && <p className="rounded-2xl bg-slate-50 py-4 text-center text-xs text-slate-400 dark:bg-white/5">داده‌ای نیست</p>}
+            {months.length === 0 && <p className="rounded-2xl bg-surface-2 py-4 text-center text-xs text-muted ">داده‌ای نیست</p>}
             {months.map((m) => (
               <PeriodRow
                 key={m.key}
@@ -474,7 +474,7 @@ export default function Insights() {
       </div>
 
       {/* ── مقایسه با بازه قبل + نکات ─────────────────────── */}
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <Card>
           <CardHead title="مقایسه با بازه قبلی" sub={`بازه‌ای هم‌اندازه، پیش از ${formatJalali(range.from)}`} />
           <div className="space-y-3 px-5 pb-5">
@@ -511,8 +511,8 @@ export default function Insights() {
             {buildLifeInsights({
               stats, s, roll, streakDays, sinceLast, range,
             }).map((t, i) => (
-              <li key={i} className="flex items-start gap-2.5 rounded-2xl bg-violet-500/[0.06] px-3.5 py-3 text-[12px] leading-6 text-slate-600 ring-1 ring-violet-500/15 dark:text-slate-300">
-                <Sparkles size={15} className="mt-0.5 shrink-0 text-violet-500" />
+              <li key={i} className="flex items-start gap-2.5 rounded-2xl bg-violet/[0.06] px-3.5 py-3 text-[12px] leading-6 text-ink-2 ring-1 ring-violet/15 ">
+                <Sparkles size={15} className="mt-0.5 shrink-0 text-violet-ink" />
                 {t}
               </li>
             ))}
@@ -530,8 +530,8 @@ export default function Insights() {
 
         <div className="space-y-4 px-5 pb-5">
           {/* انتخاب سریع */}
-          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
-            <p className="mb-2 text-[11px] font-black text-slate-500">انتخاب سریع</p>
+          <div className="rounded-2xl border border-line p-3.5 ">
+            <p className="mb-2 text-[11px] font-black text-muted">انتخاب سریع</p>
             <div className="flex flex-wrap gap-1.5">
               <Chip onClick={() => selectMany(range.days)}><ListChecks size={13} /> همه روزهای بازه</Chip>
               <Chip onClick={() => selectMany(scoredDays)}><Star size={13} /> روزهای دارای نمره ({toFa(scoredDays.length)})</Chip>
@@ -543,10 +543,10 @@ export default function Insights() {
           </div>
 
           {/* انتخاب تصادفی */}
-          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
-            <p className="mb-2 text-[11px] font-black text-slate-500">انتخاب تصادفی</p>
+          <div className="rounded-2xl border border-line p-3.5 ">
+            <p className="mb-2 text-[11px] font-black text-muted">انتخاب تصادفی</p>
             <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 text-[12px] font-bold text-slate-500">
+              <label className="flex items-center gap-2 text-[12px] font-bold text-muted">
                 تعداد:
                 <input
                   value={String(randomN)}
@@ -556,7 +556,7 @@ export default function Insights() {
                   }}
                   inputMode="numeric"
                   dir="ltr"
-                  className={cx(inputCls, 'tabular h-9 w-20 text-center')}
+                  className={cx(inputCls, 'num h-9 w-20 text-center')}
                 />
               </label>
               <Chip active={randomOnlyScored} onClick={() => setRandomOnlyScored((v) => !v)}>
@@ -586,16 +586,16 @@ export default function Insights() {
                 <Dices size={15} /> تصادفی‌کردن ترتیب
               </Btn>
             </div>
-            <p className="mt-2 text-[10px] leading-5 text-slate-400">
+            <p className="mt-2 text-[11px] leading-5 text-muted">
               انتخاب تصادفی از میان روزهای بازه انجام می‌شود و جایگزین انتخاب فعلی می‌شود.
             </p>
           </div>
 
           {/* گزینه‌های خروجی */}
-          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+          <div className="rounded-2xl border border-line p-3.5 ">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] font-black text-slate-500">محتوای خروجی</p>
-              <div className="flex gap-1.5">
+              <p className="text-[11px] font-black text-muted">محتوای خروجی</p>
+              <div className="flex min-w-0 flex-wrap gap-1.5">
                 <Chip onClick={() => setOpts(DEFAULT_SUMMARY_OPTIONS)}><RefreshCw size={13} /> حالت پیش‌فرض</Chip>
                 <Chip
                   onClick={() =>
@@ -621,7 +621,7 @@ export default function Insights() {
                 </Chip>
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
               <OptRow label="نمره روز" icon={<Star size={14} />} checked={opts.includeScore} onChange={(v) => setOpts((o) => ({ ...o, includeScore: v }))} />
               <OptRow label="حال روز" icon={<Smile size={14} />} checked={opts.includeMood} onChange={(v) => setOpts((o) => ({ ...o, includeMood: v }))} />
               <OptRow label="توضیحات روز" icon={<FileText size={14} />} checked={opts.includeNote} onChange={(v) => setOpts((o) => ({ ...o, includeNote: v }))} />
@@ -637,12 +637,12 @@ export default function Insights() {
           </div>
 
           {/* لیست روزها برای انتخاب دستی */}
-          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+          <div className="rounded-2xl border border-line p-3.5 ">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] font-black text-slate-500">
+              <p className="text-[11px] font-black text-muted">
                 انتخاب دستی روزها ({range.label})
               </p>
-              <span className="text-[10px] text-slate-400">کلیک = انتخاب/حذف • دابل‌کلیک = جزئیات روز</span>
+              <span className="text-[11px] text-muted">کلیک = انتخاب/حذف • دابل‌کلیک = جزئیات روز</span>
             </div>
             {stats.length === 0 ? (
               <Empty icon={<CalendarRange size={24} />} title="بازه خالی است" sub="بازه دیگری انتخاب کنید" />
@@ -660,19 +660,19 @@ export default function Insights() {
                       className={cx(
                         'flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold transition active:scale-[0.97]',
                         on
-                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                          : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-white/10 dark:text-slate-300',
-                        d.day === today && !on && 'ring-1 ring-emerald-400/50',
+                          ? 'border-brand bg-brand/10 text-brand-ink '
+                          : 'border-line text-muted hover:border-line-strong  ',
+                        d.day === today && !on && 'ring-1 ring-brand/50',
                       )}
                       style={on ? undefined : { background: d.score != null ? 'transparent' : undefined }}
                     >
-                      <span className="tabular">{toFa(j.jd)} {J_MONTHS[j.jm - 1].slice(0, 4)}</span>
+                      <span className="num">{toFa(j.jd)} {J_MONTHS[j.jm - 1].slice(0, 4)}</span>
                       {d.score != null ? (
-                        <span className="tabular rounded-md bg-amber-500/15 px-1.5 text-[10px] font-black text-amber-700 dark:text-amber-300">
+                        <span className="num rounded-md bg-warn/15 px-1.5 text-[11px] font-black text-warn-ink ">
                           {formatScore(d.score)}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
+                        <span className="text-[11px] text-muted ">—</span>
                       )}
                       {d.mood != null && <span className="text-[11px] leading-none">{moodFace(d.mood)}</span>}
                       {on && <CheckIcon size={11} />}
@@ -703,29 +703,29 @@ export default function Insights() {
             >
               <Star size={15} /> {opts.includeScore ? 'خروجی با نمره' : 'خروجی بدون نمره'}
             </Btn>
-            <span className="ms-auto text-[11px] text-slate-400">
+            <span className="ms-auto text-[11px] text-muted">
               {inRangeSelected.length ? `${toFa(outputText.length)} نویسه • ${toFa(inRangeSelected.length)} روز` : 'روزی انتخاب نشده است'}
             </span>
           </div>
 
           {/* پیش‌نمایش */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 dark:border-white/5 dark:bg-white/[0.03]">
-              <span className="flex items-center gap-1.5 text-[11px] font-black text-slate-500">
+          <div className="overflow-hidden rounded-2xl border border-line ">
+            <div className="flex items-center justify-between gap-2 border-b border-line bg-surface-2 px-4 py-2.5  dark:bg-white/[0.03]">
+              <span className="flex items-center gap-1.5 text-[11px] font-black text-muted">
                 <Eye size={14} /> پیش‌نمایش خروجی متنی
               </span>
-              <span className="flex gap-1.5">
+              <span className="flex min-w-0 flex-wrap gap-1.5">
                 <button
                   onClick={copyOutput}
                   disabled={inRangeSelected.length === 0}
-                  className="rounded-lg px-2 py-1 text-[11px] font-bold text-slate-500 transition hover:bg-slate-200/70 disabled:opacity-40 dark:hover:bg-white/10"
+                  className="rounded-lg px-2 py-1 text-[11px] font-bold text-muted transition hover:bg-sunken disabled:opacity-40 "
                 >
                   <Copy size={12} className="inline" /> کپی
                 </button>
                 <button
                   onClick={downloadTxt}
                   disabled={inRangeSelected.length === 0}
-                  className="rounded-lg px-2 py-1 text-[11px] font-bold text-slate-500 transition hover:bg-slate-200/70 disabled:opacity-40 dark:hover:bg-white/10"
+                  className="rounded-lg px-2 py-1 text-[11px] font-bold text-muted transition hover:bg-sunken disabled:opacity-40 "
                 >
                   <Download size={12} className="inline" /> دانلود
                 </button>
@@ -733,7 +733,7 @@ export default function Insights() {
             </div>
             <pre
               dir="rtl"
-              className="max-h-96 overflow-auto whitespace-pre-wrap px-4 py-3 text-right text-[12px] leading-7 text-slate-700 dark:text-slate-200"
+              className="max-h-96 overflow-auto whitespace-pre-wrap px-4 py-3 text-right text-[12px] leading-7 text-ink-2 "
             >
               {inRangeSelected.length ? outputText : 'روزی برای خروجی انتخاب نشده است — از دکمه‌های بالا یا لیست روزها انتخاب کنید.'}
             </pre>
@@ -747,7 +747,7 @@ export default function Insights() {
         <div className="overflow-x-auto px-5 pb-5">
           <table className="w-full min-w-[860px] text-right text-xs">
             <thead>
-              <tr className="border-b border-slate-100 text-slate-400 dark:border-white/10">
+              <tr className="border-b border-line text-muted ">
                 <th className="py-2.5 font-bold">تاریخ</th>
                 <th className="py-2.5 font-bold">نمره</th>
                 <th className="py-2.5 font-bold">حال</th>
@@ -761,38 +761,38 @@ export default function Insights() {
             </thead>
             <tbody>
               {stats.length === 0 && (
-                <tr><td colSpan={9} className="py-8 text-center text-slate-400">داده‌ای در این بازه نیست</td></tr>
+                <tr><td colSpan={9} className="py-8 text-center text-muted">داده‌ای در این بازه نیست</td></tr>
               )}
               {[...stats].reverse().map((d) => (
-                <tr key={d.day} className="border-b border-slate-50 last:border-0 dark:border-white/5">
-                  <td className="py-2.5 font-black text-slate-700 dark:text-slate-200">
+                <tr key={d.day} className="border-b border-line last:border-0 ">
+                  <td className="py-2.5 font-black text-ink-2 ">
                     {formatJalali(d.day, { weekday: true })}
-                    <span className="tabular mr-1.5 block text-[10px] font-bold text-slate-400">{formatJalaliShort(d.day)}</span>
+                    <span className="num mr-1.5 block text-[11px] font-bold text-muted">{formatJalaliShort(d.day)}</span>
                   </td>
                   <td className="py-2.5">
                     {d.score != null ? (
-                      <span className="tabular inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 font-black text-amber-700 dark:text-amber-300">
+                      <span className="num inline-flex items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 font-black text-warn-ink ">
                         <Star size={11} /> {formatScore(d.score)}
                       </span>
                     ) : (
-                      <span className="text-slate-300 dark:text-slate-600">{EMPTY_LABEL}</span>
+                      <span className="text-muted ">{EMPTY_LABEL}</span>
                     )}
                   </td>
                   <td className="py-2.5">
                     {d.mood != null
-                      ? <span title={moodLabel(d.mood)}>{moodFace(d.mood)} <span className="tabular text-slate-400">{formatScore(d.mood)}</span></span>
-                      : <span className="text-slate-300 dark:text-slate-600">{EMPTY_LABEL}</span>}
+                      ? <span title={moodLabel(d.mood)}>{moodFace(d.mood)} <span className="num text-muted">{formatScore(d.mood)}</span></span>
+                      : <span className="text-muted ">{EMPTY_LABEL}</span>}
                   </td>
-                  <td className="max-w-[260px] py-2.5 text-slate-500 dark:text-slate-300">
+                  <td className="max-w-[260px] py-2.5 text-muted ">
                     <span className="line-clamp-2">{orEmpty(d.dayNote)}</span>
                   </td>
-                  <td className="tabular py-2.5 text-slate-500 dark:text-slate-300">
+                  <td className="num py-2.5 text-muted ">
                     {d.habitsTotal > 0 ? `${toFa(d.habitsDone)}/${toFa(d.habitsTotal)}` : EMPTY_LABEL}
                   </td>
-                  <td className="tabular py-2.5 text-slate-500 dark:text-slate-300">
+                  <td className="num py-2.5 text-muted ">
                     {d.tasksTotal > 0 ? `${toFa(d.tasksDone)}/${toFa(d.tasksTotal)} (${toFa(d.tasksPct)}٪)` : EMPTY_LABEL}
                   </td>
-                  <td className="tabular py-2.5 text-slate-500 dark:text-slate-300">
+                  <td className="num py-2.5 text-muted ">
                     {d.sleepMin != null
                       ? formatDurationFa(d.sleepMin)
                       : d.wake || d.sleep
@@ -802,12 +802,12 @@ export default function Insights() {
                   <td className="py-2.5">
                     {d.sport
                       ? <Badge tone="green"><Footprints size={11} /> بله{d.sportType ? ` — ${d.sportType}` : ''}</Badge>
-                      : <span className="text-slate-300 dark:text-slate-600">{EMPTY_LABEL}</span>}
+                      : <span className="text-muted ">{EMPTY_LABEL}</span>}
                   </td>
                   <td className="py-2.5">
                     <button
                       onClick={() => setDetailDay(d.day)}
-                      className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-emerald-500/10 hover:text-emerald-600"
+                      className="grid grid-cols-1 h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-brand/10 hover:text-brand-ink"
                       title="جزئیات کامل روز"
                     >
                       <Eye size={14} />
@@ -843,7 +843,7 @@ export default function Insights() {
               </Badge>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <DetailBox title="📝 توضیحات روز" lines={[orEmpty(detail.dayNote)]} />
               <DetailBox title="🏆 دستاوردها" lines={[orEmpty(detail.wins)]} />
               <DetailBox title="🔧 قابل بهبود" lines={[orEmpty(detail.improve)]} />
@@ -862,7 +862,7 @@ export default function Insights() {
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <DetailBox
                 title="🔥 عادت‌ها"
                 lines={
@@ -898,7 +898,7 @@ export default function Insights() {
               />
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3 dark:border-white/5">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3 ">
               <Btn
                 variant="outline"
                 onClick={async () => {
@@ -936,12 +936,12 @@ function Kpi({
   c: string;
   tone?: 'slate' | 'green' | 'red';
 }) {
-  const toneCls = tone === 'green' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'red' ? 'text-rose-500' : 'text-slate-400';
+  const toneCls = tone === 'green' ? 'text-brand-ink ' : tone === 'red' ? 'text-danger-ink' : 'text-muted';
   return (
     <Card hover className="p-4">
       <span className={cx('mb-2.5 grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-md', c)}>{icon}</span>
-      <p className="text-[11px] font-bold text-slate-400">{label}</p>
-      <p className="tabular mt-1 text-[15px] font-black text-slate-800 dark:text-white">{value}</p>
+      <p className="text-[11px] font-bold text-muted">{label}</p>
+      <p className="num mt-1 text-[15px] font-black text-ink ">{value}</p>
       {sub && <p className={cx('mt-1 text-[11px] font-bold', toneCls)}>{sub}</p>}
     </Card>
   );
@@ -949,10 +949,10 @@ function Kpi({
 
 function MiniStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl bg-slate-50 px-3 py-2.5 dark:bg-white/5">
-      <p className="tabular text-base font-black text-slate-800 dark:text-white">{value}</p>
-      <p className="mt-0.5 text-[10px] font-bold text-slate-400">{label}</p>
-      {hint && <p className="mt-0.5 text-[10px] text-slate-400">{hint}</p>}
+    <div className="rounded-2xl bg-surface-2 px-3 py-2.5 ">
+      <p className="num text-base font-black text-ink ">{value}</p>
+      <p className="mt-0.5 text-[11px] font-bold text-muted">{label}</p>
+      {hint && <p className="mt-0.5 text-[11px] text-muted">{hint}</p>}
     </div>
   );
 }
@@ -968,23 +968,23 @@ function PeriodRow({
   onPick: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-100 px-3.5 py-2.5 dark:border-white/5">
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line px-3.5 py-2.5 ">
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-black text-slate-700 dark:text-slate-200">{label}</p>
-        <p className="mt-0.5 text-[10px] text-slate-400">{sub}</p>
+        <p className="text-[13px] font-black text-ink-2 ">{label}</p>
+        <p className="mt-0.5 text-[11px] text-muted">{sub}</p>
       </div>
-      <span className="tabular flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-700 dark:text-amber-300">
+      <span className="num flex items-center gap-1 rounded-full bg-warn/10 px-2.5 py-1 text-[11px] font-black text-warn-ink ">
         <Star size={11} /> {score != null ? formatScore(score) : EMPTY_LABEL}
       </span>
-      <span className="tabular flex items-center gap-1 rounded-full bg-sky-500/10 px-2.5 py-1 text-[11px] font-black text-sky-700 dark:text-sky-300">
+      <span className="num flex items-center gap-1 rounded-full bg-info/10 px-2.5 py-1 text-[11px] font-black text-info-ink ">
         <Target size={11} /> {tasksPct != null ? `${toFa(tasksPct)}٪` : EMPTY_LABEL}
       </span>
-      <span className="tabular flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-700 dark:text-emerald-300">
+      <span className="num flex items-center gap-1 rounded-full bg-brand/10 px-2.5 py-1 text-[11px] font-black text-brand-ink ">
         <Flame size={11} /> {habitRate != null ? `${toFa(habitRate)}٪` : EMPTY_LABEL}
       </span>
       <button
         onClick={onPick}
-        className="rounded-lg px-2 py-1 text-[10px] font-bold text-slate-400 transition hover:bg-emerald-500/10 hover:text-emerald-600"
+        className="rounded-lg px-2 py-1 text-[11px] font-bold text-muted transition hover:bg-brand/10 hover:text-brand-ink"
         title="انتخاب روزهای این بازه برای خروجی"
       >
         انتخاب روزها
@@ -1005,21 +1005,21 @@ function CompareRow({
   return (
     <div className="flex items-center gap-3">
       <div className="min-w-0 flex-1">
-        <p className="text-[12px] font-bold text-slate-600 dark:text-slate-300">{label}</p>
-        <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+        <p className="text-[12px] font-bold text-ink-2 ">{label}</p>
+        <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-sunken ">
           {prev != null && (
-            <div className="h-full bg-slate-300 dark:bg-white/25" style={{ width: `${Math.min(100, (prev / Math.max(now ?? 0, prev, 1)) * 100)}%` }} />
+            <div className="h-full bg-line-strong " style={{ width: `${Math.min(100, (prev / Math.max(now ?? 0, prev, 1)) * 100)}%` }} />
           )}
           {now != null && (
-            <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, (now / Math.max(now ?? 0, prev ?? 0, 1)) * 100)}%` }} />
+            <div className="h-full bg-brand" style={{ width: `${Math.min(100, (now / Math.max(now ?? 0, prev ?? 0, 1)) * 100)}%` }} />
           )}
         </div>
       </div>
       <div className="w-28 shrink-0 text-left">
-        <p className="tabular text-[12px] font-black text-slate-700 dark:text-slate-100">
+        <p className="num text-[12px] font-black text-ink-2 ">
           {now != null ? format(now) : EMPTY_LABEL}
         </p>
-        <p className={cx('tabular text-[10px] font-bold', delta == null ? 'text-slate-400' : delta > 0 ? 'text-emerald-500' : delta < 0 ? 'text-rose-500' : 'text-slate-400')}>
+        <p className={cx('num text-[11px] font-bold', delta == null ? 'text-muted' : delta > 0 ? 'text-brand-ink' : delta < 0 ? 'text-danger-ink' : 'text-muted')}>
           {delta == null ? '—' : `${delta > 0 ? '▲' : delta < 0 ? '▼' : '●'} ${formatScore(Math.abs(delta))} نسبت به قبل`}
         </p>
       </div>
@@ -1042,11 +1042,11 @@ function OptRow({
       className={cx(
         'flex items-center gap-2 rounded-xl border px-3 py-2 text-right text-[11px] font-bold transition',
         checked
-          ? 'border-emerald-500 bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-300'
-          : 'border-slate-200 text-slate-400 hover:border-slate-300 dark:border-white/10 dark:text-slate-400',
+          ? 'border-brand bg-brand/[0.07] text-brand-ink '
+          : 'border-line text-muted hover:border-line-strong  ',
       )}
     >
-      <span className={cx('grid h-5 w-5 shrink-0 place-items-center rounded-md border', checked ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-white/20')}>
+      <span className={cx('grid h-5 w-5 shrink-0 place-items-center rounded-md border', checked ? 'border-brand bg-brand text-white' : 'border-line-strong ')}>
         {checked && <CheckIcon size={11} />}
       </span>
       {icon}
@@ -1057,11 +1057,11 @@ function OptRow({
 
 function DetailBox({ title, lines }: { title: string; lines: string[] }) {
   return (
-    <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
-      <p className="mb-1.5 text-[11px] font-black text-slate-500">{title}</p>
+    <div className="rounded-2xl border border-line p-3.5 ">
+      <p className="mb-1.5 text-[11px] font-black text-muted">{title}</p>
       <ul className="space-y-1">
         {lines.map((l, i) => (
-          <li key={i} className="text-[12px] leading-6 text-slate-600 dark:text-slate-300">{l}</li>
+          <li key={i} className="text-[12px] leading-6 text-ink-2 ">{l}</li>
         ))}
       </ul>
     </div>

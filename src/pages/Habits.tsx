@@ -76,10 +76,10 @@ export default function Habits() {
     <div className="space-y-5">
       {/* خلاصه */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MiniStat icon={<CalendarCheck2 size={18} />} label="انجام‌شده امروز" value={`${toFa(stats.doneToday)} از ${toFa(stats.total)}`} color="from-emerald-500 to-teal-600" />
-        <MiniStat icon={<Flame size={18} />} label="بهترین استریک" value={`${toFa(stats.best)} روز`} color="from-orange-500 to-rose-500" />
-        <MiniStat icon={<Target size={18} />} label="کل تیک‌ها" value={`${toFa(stats.totalChecks)} بار`} color="from-sky-500 to-blue-600" />
-        <MiniStat icon={<Trophy size={18} />} label="نرخ موفقیت هفته" value={`${toFa(weekRate(state.habitLogs, activeHabits))}٪`} color="from-violet-500 to-purple-600" />
+        <MiniStat icon={<CalendarCheck2 size={18} />} label="انجام‌شده امروز" value={`${toFa(stats.doneToday)} از ${toFa(stats.total)}`} color="from-emerald-700 to-teal-700" />
+        <MiniStat icon={<Flame size={18} />} label="بهترین استریک" value={`${toFa(stats.best)} روز`} color="from-orange-700 to-rose-700" />
+        <MiniStat icon={<Target size={18} />} label="کل تیک‌ها" value={`${toFa(stats.totalChecks)} بار`} color="from-sky-700 to-blue-700" />
+        <MiniStat icon={<Trophy size={18} />} label="نرخ موفقیت هفته" value={`${toFa(weekRate(state.habitLogs, activeHabits))}٪`} color="from-violet-700 to-purple-700" />
       </div>
 
       <Card>
@@ -117,33 +117,33 @@ export default function Habits() {
       {archivedHabits.length > 0 && (
         <Card>
           <button onClick={() => setShowArchived((v) => !v)} className="flex w-full items-center gap-2 px-5 py-4 text-right">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300">
+            <span className="grid grid-cols-1 h-9 w-9 place-items-center rounded-xl bg-sunken text-muted  ">
               <Archive size={17} />
             </span>
             <span className="flex-1">
-              <span className="block text-[13px] font-black text-slate-700 dark:text-slate-200">
+              <span className="block text-[13px] font-black text-ink-2 ">
                 عادت‌های بایگانی‌شده ({toFa(archivedHabits.length)})
               </span>
-              <span className="block text-[11px] text-slate-400">مخفی از ردیاب روزانه — سوابقشان حفظ شده است</span>
+              <span className="block text-[11px] text-muted">مخفی از ردیاب روزانه — سوابقشان حفظ شده است</span>
             </span>
-            <motion.span animate={{ rotate: showArchived ? 180 : 0 }} className="text-slate-400">
+            <motion.span animate={{ rotate: showArchived ? 180 : 0 }} className="text-muted">
               <ChevronDown size={18} />
             </motion.span>
           </button>
           {showArchived && (
             <ul className="space-y-1.5 px-5 pb-5">
               {archivedHabits.map((h) => (
-                <li key={h.id} className="flex items-center gap-2.5 rounded-xl border border-slate-100 px-3 py-2.5 opacity-70 dark:border-white/5">
+                <li key={h.id} className="flex items-center gap-2.5 rounded-xl border border-line px-3 py-2.5 opacity-70 ">
                   <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: h.color }} />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-slate-600 dark:text-slate-300">{h.title}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-ink-2 ">{h.title}</span>
                   <button
                     onClick={() => setHabitArchived(h.id, false)}
-                    className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-emerald-600 transition hover:bg-emerald-500/10"
+                    className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-brand-ink transition hover:bg-brand/10"
                     title="بازگرداندن به عادت‌های فعال"
                   >
                     <ArchiveRestore size={13} /> بازگردانی
                   </button>
-                  <button onClick={() => setConfirmId(h.id)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500" title="حذف کامل">
+                  <button onClick={() => setConfirmId(h.id)} className="grid grid-cols-1 h-8 w-8 place-items-center rounded-lg text-muted hover:bg-danger/10 hover:text-danger-ink" title="حذف کامل">
                     <Trash2 size={14} />
                   </button>
                 </li>
@@ -171,12 +171,12 @@ export default function Habits() {
                         className={cx(
                           'aspect-square w-full rounded-md transition',
                           v < 0 ? 'bg-transparent'
-                            : v === 0 ? 'bg-slate-100 dark:bg-white/5'
-                            : v < 0.4 ? 'bg-emerald-200 dark:bg-emerald-900'
-                            : v < 0.7 ? 'bg-emerald-300 dark:bg-emerald-700'
-                            : v < 1 ? 'bg-emerald-400 dark:bg-emerald-500'
-                            : 'bg-emerald-500 dark:bg-emerald-400',
-                          isToday && 'ring-2 ring-slate-800 dark:ring-white',
+                            : v === 0 ? 'bg-sunken '
+                            : v < 0.4 ? 'bg-emerald-200 '
+                            : v < 0.7 ? 'bg-emerald-300 '
+                            : v < 1 ? 'bg-brand '
+                            : 'bg-brand ',
+                          isToday && 'ring-2 ring-line-strong ',
                         )}
                       />
                     );
@@ -184,7 +184,7 @@ export default function Habits() {
                 </div>
               ))}
             </div>
-            <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+            <div className="mt-3 flex items-center justify-between text-[11px] text-muted">
               <span className="flex gap-3" dir="rtl">
                 {J_WEEKDAYS_SHORT.map((w, i) => (
                   <span key={i} className="font-bold">{w}</span>
@@ -193,10 +193,10 @@ export default function Habits() {
               <span className="flex items-center gap-1.5" dir="ltr">
                 کمتر
                 <span className="flex gap-1">
-                  <span className="h-3 w-3 rounded bg-slate-100 dark:bg-white/10" />
+                  <span className="h-3 w-3 rounded bg-sunken " />
                   <span className="h-3 w-3 rounded bg-emerald-200" />
-                  <span className="h-3 w-3 rounded bg-emerald-400" />
-                  <span className="h-3 w-3 rounded bg-emerald-600" />
+                  <span className="h-3 w-3 rounded bg-brand" />
+                  <span className="h-3 w-3 rounded bg-brand" />
                 </span>
                 بیشتر
               </span>
@@ -207,7 +207,7 @@ export default function Habits() {
 
       {/* انگیزشی */}
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-3 bg-gradient-to-l from-amber-500 to-orange-600 px-5 py-4 text-white">
+        <div className="flex items-center gap-3 bg-gradient-to-l from-amber-700 to-orange-700 px-5 py-4 text-white">
           <Sparkles size={20} />
           <div>
             <h3 className="text-sm font-black">قانون «هرگز دو بار پشت سر هم جا نزن»</h3>
@@ -238,8 +238,8 @@ function MiniStat({ icon, label, value, color }: { icon: React.ReactNode; label:
     <Card className="flex items-center gap-3 p-4">
       <span className={cx('grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-md', color)}>{icon}</span>
       <span>
-        <span className="tabular block text-base font-black text-slate-800 dark:text-white">{value}</span>
-        <span className="block text-[11px] font-bold text-slate-400">{label}</span>
+        <span className="num block text-base font-black text-ink ">{value}</span>
+        <span className="block text-[11px] font-bold text-muted">{label}</span>
       </span>
     </Card>
   );
@@ -271,14 +271,14 @@ function HabitRow({
       transition={{ delay: Math.min(index * 0.05, 0.3) }}
       className={cx(
         'group rounded-2xl border p-4 transition',
-        doneToday ? 'border-emerald-500/25 bg-emerald-500/[0.04]' : 'border-slate-100 hover:border-slate-200 dark:border-white/5',
+        doneToday ? 'border-brand/25 bg-brand/[0.04]' : 'border-line hover:border-line-strong ',
       )}
     >
       <div className="flex items-center gap-3">
         <button
           onClick={() => onToggle(today)}
           title={doneToday ? 'برداشتن تیک امروز' : 'ثبت انجام امروز'}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-white shadow-md transition active:scale-90"
+          className="grid grid-cols-1 h-12 w-12 shrink-0 place-items-center rounded-2xl text-white shadow-md transition active:scale-90"
           style={{ background: doneToday ? h.color : `${h.color}35`, color: doneToday ? '#fff' : h.color }}
         >
           {doneToday ? (
@@ -288,17 +288,17 @@ function HabitRow({
           )}
         </button>
         <div className="min-w-0 flex-1">
-          <p className={cx('truncate text-sm font-black', doneToday ? 'text-slate-500' : 'text-slate-800 dark:text-slate-100')}>{h.title}</p>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-400">
-            {streak > 0 && <span className="inline-flex items-center gap-1 text-orange-500"><Flame size={11} />{toFa(streak)} روز پیاپی</span>}
+          <p className={cx('truncate text-sm font-black', doneToday ? 'text-muted' : 'text-ink ')}>{h.title}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-muted">
+            {streak > 0 && <span className="inline-flex items-center gap-1 text-warn-ink"><Flame size={11} />{toFa(streak)} روز پیاپی</span>}
             <span>{toFa(week)} از {toFa(h.targetPerWeek)} این هفته</span>
             <span>• مجموع {toFa(total)} بار</span>
           </p>
         </div>
-        <span className="flex shrink-0 gap-0.5 transition sm:opacity-0 sm:group-hover:opacity-100">
-          <button onClick={onArchive} title="بایگانی (مخفی از ردیاب روزانه، بدون حذف سوابق)" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-amber-500/10 hover:text-amber-600"><Archive size={14} /></button>
-          <button onClick={onEdit} title="ویرایش" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-sky-500/10 hover:text-sky-600"><Pencil size={14} /></button>
-          <button onClick={onDelete} title="حذف" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500"><Trash2 size={14} /></button>
+        <span className="flex shrink-0 gap-0.5 transition">
+          <button onClick={onArchive} title="بایگانی (مخفی از ردیاب روزانه، بدون حذف سوابق)" className="grid grid-cols-1 h-8 w-8 place-items-center rounded-lg text-muted hover:bg-warn/10 hover:text-warn-ink"><Archive size={14} /></button>
+          <button onClick={onEdit} title="ویرایش" className="grid grid-cols-1 h-8 w-8 place-items-center rounded-lg text-muted hover:bg-info/10 hover:text-info-ink"><Pencil size={14} /></button>
+          <button onClick={onDelete} title="حذف" className="grid grid-cols-1 h-8 w-8 place-items-center rounded-lg text-muted hover:bg-danger/10 hover:text-danger-ink"><Trash2 size={14} /></button>
         </span>
       </div>
       <div className="mt-3 flex items-center gap-2">
@@ -313,17 +313,17 @@ function HabitRow({
                 onClick={() => onToggle(d)}
                 title={`${formatJalali(d)} — ${done ? 'انجام شده' : 'انجام نشده'}`}
                 className={cx(
-                  'flex h-11 flex-1 flex-col items-center justify-center rounded-xl border text-[10px] font-black transition active:scale-95',
+                  'flex h-11 flex-1 flex-col items-center justify-center rounded-xl border text-[11px] font-black transition active:scale-95',
                   done
                     ? 'border-transparent text-white'
                     : isToday
-                      ? 'border-dashed border-slate-300 text-slate-400 hover:border-slate-400 dark:border-white/20'
-                      : 'border-slate-100 text-slate-400 hover:border-slate-300 dark:border-white/5',
+                      ? 'border-dashed border-line-strong text-muted hover:border-line-strong '
+                      : 'border-line text-muted hover:border-line-strong ',
                 )}
                 style={done ? { background: h.color } : undefined}
               >
                 <span>{J_WEEKDAYS_SHORT[(new Date(d).getDay() + 1) % 7]}</span>
-                <span className="tabular">{toFa(jj.jd)}</span>
+                <span className="num">{toFa(jj.jd)}</span>
               </button>
             );
           })}
@@ -331,7 +331,7 @@ function HabitRow({
       </div>
       <div className="mt-2.5 flex items-center gap-2">
         <Progress value={pct} color={h.color} h={6} />
-        <span className="tabular shrink-0 text-[11px] font-black text-slate-400">{toFa(pct)}٪</span>
+        <span className="num shrink-0 text-[11px] font-black text-muted">{toFa(pct)}٪</span>
       </div>
     </motion.div>
   );

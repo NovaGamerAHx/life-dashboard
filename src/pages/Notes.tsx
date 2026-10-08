@@ -46,12 +46,12 @@ export default function Notes() {
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[180px] flex-1">
-            <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="جست‌وجو در یادداشت‌ها…"
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 pr-9 text-[13px] outline-none transition-all placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-white/10 dark:bg-white/5 dark:focus:bg-slate-900"
+              className="h-10 w-full rounded-xl border border-line bg-surface-2 px-3 pr-9 text-[13px] outline-none transition-all placeholder:text-muted focus:border-brand focus:bg-surface focus:ring-4 focus:ring-brand/10   "
             />
           </div>
           <div className="flex max-w-full gap-1.5 overflow-x-auto">
@@ -61,7 +61,7 @@ export default function Notes() {
                 onClick={() => setTagF(t)}
                 className={cx(
                   'shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition',
-                  tagF === t ? 'bg-slate-900 text-white dark:bg-emerald-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300',
+                  tagF === t ? 'bg-ink text-white ' : 'bg-sunken text-muted hover:bg-sunken  ',
                 )}
               >
                 {t === 'همه' ? `همه (${toFa(state.notes.length)})` : t}
@@ -89,24 +89,24 @@ export default function Notes() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i * 0.04, 0.3) }}
-              className="group break-inside-avoid rounded-3xl border border-slate-200/70 bg-white p-4 shadow-sm transition hover:shadow-lg dark:border-white/10 dark:bg-slate-900"
+              className="group break-inside-avoid rounded-3xl border border-line bg-surface p-4 shadow-sm transition hover:shadow-lg  "
               style={{ background: `linear-gradient(180deg, ${n.color}55 0%, transparent 90px)` }}
             >
               <div className="flex items-start gap-2">
-                <h3 className="flex-1 text-sm font-black leading-6 text-slate-800 dark:text-slate-100">{n.title}</h3>
+                <h3 className="flex-1 text-sm font-black leading-6 text-ink ">{n.title}</h3>
                 <button
                   onClick={() => updateNote(n.id, { pinned: !n.pinned })}
                   title={n.pinned ? 'برداشتن سنجاق' : 'سنجاق کردن'}
                   className={cx(
                     'grid h-7 w-7 shrink-0 place-items-center rounded-lg transition',
-                    n.pinned ? 'bg-amber-500/15 text-amber-500' : 'text-slate-300 hover:bg-slate-100 hover:text-amber-500 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:bg-white/10',
+                    n.pinned ? 'bg-warn/15 text-warn-ink' : 'text-muted hover:bg-sunken hover:text-warn-ink ',
                   )}
                 >
                   {n.pinned ? <Pin size={14} fill="currentColor" /> : <PinOff size={14} />}
                 </button>
               </div>
               {n.body && (
-                <p className="mt-1.5 whitespace-pre-wrap text-xs leading-6 text-slate-600 dark:text-slate-300">
+                <p className="mt-1.5 whitespace-pre-wrap text-xs leading-6 text-ink-2 ">
                   {n.body.length > 320 ? n.body.slice(0, 320) + '…' : n.body}
                 </p>
               )}
@@ -116,23 +116,23 @@ export default function Notes() {
                     <button
                       key={t}
                       onClick={() => setTagF(t)}
-                      className="rounded-md bg-slate-900/5 px-1.5 py-0.5 text-[10px] font-bold text-slate-500 transition hover:bg-slate-900/10 dark:bg-white/10 dark:text-slate-300"
+                      className="rounded-md bg-ink/5 px-1.5 py-0.5 text-[11px] font-bold text-muted transition hover:bg-ink/10  "
                     >
                       #{t}
                     </button>
                   ))}
                 </div>
               )}
-              <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5 dark:border-white/5">
-                <span className="text-[10px] text-slate-400">{formatJalali(n.updatedAt)}</span>
-                <span className="flex gap-0.5 transition sm:opacity-0 sm:group-hover:opacity-100">
-                  <button onClick={() => copy(n)} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/10" title="کپی متن">
-                    {copied === n.id ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+              <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5 ">
+                <span className="text-[11px] text-muted">{formatJalali(n.updatedAt)}</span>
+                <span className="flex gap-0.5 transition">
+                  <button onClick={() => copy(n)} className="grid grid-cols-1 h-7 w-7 place-items-center rounded-lg text-muted hover:bg-sunken hover:text-ink " title="کپی متن">
+                    {copied === n.id ? <Check size={13} className="text-brand-ink" /> : <Copy size={13} />}
                   </button>
-                  <button onClick={() => { setEdit(n); setShowM(true); }} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-sky-500/10 hover:text-sky-600" title="ویرایش">
+                  <button onClick={() => { setEdit(n); setShowM(true); }} className="grid grid-cols-1 h-7 w-7 place-items-center rounded-lg text-muted hover:bg-info/10 hover:text-info-ink" title="ویرایش">
                     <Pencil size={13} />
                   </button>
-                  <button onClick={() => setConfirmId(n.id)} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-500" title="حذف">
+                  <button onClick={() => setConfirmId(n.id)} className="grid grid-cols-1 h-7 w-7 place-items-center rounded-lg text-muted hover:bg-danger/10 hover:text-danger-ink" title="حذف">
                     <Trash2 size={13} />
                   </button>
                 </span>

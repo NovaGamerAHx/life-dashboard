@@ -64,7 +64,7 @@ export function JalaliDateField({
         </select>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+        <span className="inline-flex items-center gap-1 text-[11px] text-muted">
           <CalendarDays size={13} />
           {value != null ? formatJalali(value, { weekday: true }) : 'تاریخ انتخاب نشده'}
         </span>
@@ -76,7 +76,7 @@ export function JalaliDateField({
               setDraft(null);
               onChange(t);
             }}
-            className="rounded-lg bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
+            className="rounded-lg bg-brand/10 px-2.5 py-1 text-[11px] font-bold text-brand-ink hover:bg-brand/15 "
           >
             امروز
           </button>
@@ -84,7 +84,7 @@ export function JalaliDateField({
             <button
               type="button"
               onClick={() => { setDraft(null); onChange(null); }}
-              className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-300"
+              className="inline-flex items-center gap-1 rounded-lg bg-sunken px-2.5 py-1 text-[11px] font-bold text-muted hover:bg-sunken  "
             >
               <Eraser size={12} /> پاک
             </button>
@@ -170,13 +170,13 @@ export function TimeField({
           dir="ltr"
           placeholder={placeholder}
           aria-label="ساعت (۲۴ ساعته)"
-          className={cx(inputCls, 'tabular text-center', err && 'border-rose-400 focus:border-rose-500')}
+          className={cx(inputCls, 'num text-center', err && 'border-danger focus:border-danger')}
         />
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           title="انتخاب ساعت از فهرست (۰ تا ۲۳)"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50/50 text-slate-500 transition hover:border-emerald-400 hover:text-emerald-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300"
+          className="grid grid-cols-1 h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-surface-2 text-muted transition hover:border-brand hover:text-brand-ink   "
         >
           <Clock size={16} />
         </button>
@@ -185,7 +185,7 @@ export function TimeField({
             type="button"
             onClick={() => { setDraft(null); onChange(''); }}
             title="پاک کردن ساعت"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-rose-300 hover:text-rose-500 dark:border-white/10"
+            className="grid grid-cols-1 h-10 w-10 shrink-0 place-items-center rounded-xl border border-line text-muted transition hover:border-danger hover:text-danger-ink "
           >
             <Eraser size={15} />
           </button>
@@ -193,31 +193,31 @@ export function TimeField({
       </div>
 
       {err && (
-        <p className="mt-1 text-[11px] font-bold text-rose-500">
+        <p className="mt-1 text-[11px] font-bold text-danger-ink">
           ساعت معتبر نیست — قالب ۲۴ ساعته مثل ۰۷:۳۰ یا ۲۳:۵۹ بنویسید
         </p>
       )}
 
       {open && (
-        <div className="absolute z-40 mt-1 w-full min-w-[210px] rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-white/10 dark:bg-slate-900">
+        <div className="absolute z-40 mt-1 w-full min-w-[210px] rounded-2xl border border-line bg-surface p-2 shadow-2xl  ">
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-[10px] font-bold text-slate-400">
+            <label className="text-[11px] font-bold text-muted">
               ساعت
               <select
                 value={hh}
                 onChange={(e) => setPart(e.target.value, mm || '00')}
-                className={cx(inputCls, 'tabular mt-1 h-9')}
+                className={cx(inputCls, 'num mt-1 h-9')}
               >
                 <option value="">—</option>
                 {HOURS.map((h) => <option key={h} value={h}>{toFa(h)}</option>)}
               </select>
             </label>
-            <label className="text-[10px] font-bold text-slate-400">
+            <label className="text-[11px] font-bold text-muted">
               دقیقه
               <select
                 value={mm}
                 onChange={(e) => setPart(hh || '00', e.target.value)}
-                className={cx(inputCls, 'tabular mt-1 h-9')}
+                className={cx(inputCls, 'num mt-1 h-9')}
               >
                 <option value="">—</option>
                 {MINUTES.map((m) => <option key={m} value={m}>{toFa(m)}</option>)}
@@ -230,7 +230,7 @@ export function TimeField({
             </Btn>
             <Btn size="xs" variant="ghost" onClick={() => setOpen(false)}>بستن</Btn>
           </div>
-          <p className="mt-2 text-[10px] leading-5 text-slate-400">
+          <p className="mt-2 text-[11px] leading-5 text-muted">
             همه ساعت‌ها در برنامه ۲۴ ساعته‌اند: از ۰۰:۰۰ تا ۲۳:۵۹ (بدون AM/PM).
           </p>
         </div>
@@ -282,7 +282,7 @@ export function ScoreField({
           onChange={(e) => onChange(roundScore(Number(e.target.value)))}
           dir="ltr"
           aria-label="نمره روز (نوار لغزان)"
-          className="h-2 flex-1 cursor-pointer accent-amber-500"
+          className="h-2 min-w-0 flex-1 cursor-pointer accent-warn"
         />
         <input
           value={txt}
@@ -299,8 +299,8 @@ export function ScoreField({
           title="ورود دستی نمره (۰ تا ۱۰ با یک رقم اعشار)"
           className={cx(
             inputCls,
-            'tabular h-10 w-20 shrink-0 text-center text-base font-black',
-            err ? 'border-rose-400' : value != null ? 'border-amber-400/60 bg-amber-500/5' : '',
+            'num !w-20 shrink-0 text-center text-base font-black',
+            err ? 'border-danger' : value != null ? 'border-warn/60 bg-warn/5' : '',
           )}
         />
         <button
@@ -309,18 +309,18 @@ export function ScoreField({
           title={value == null ? 'ثبت نمره' : 'پاک کردن نمره'}
           className={cx(
             'grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[11px] font-black transition',
-            value != null ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300' : 'bg-slate-100 text-slate-400 dark:bg-white/10',
+            value != null ? 'bg-warn/10 text-warn-ink ' : 'bg-sunken text-muted ',
           )}
         >
           {value != null ? <Eraser size={15} /> : <CheckIcon size={15} />}
         </button>
       </div>
       {!compact && (
-        <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-bold text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] font-bold text-muted">
           <span>۰ افتضاح</span>
-          <span className="text-slate-300 dark:text-slate-600">|</span>
+          <span className="text-muted ">|</span>
           <span>۵ متوسط</span>
-          <span className="text-slate-300 dark:text-slate-600">|</span>
+          <span className="text-muted ">|</span>
           <span>۱۰ عالی</span>
           <span className="ms-auto flex gap-1">
             {[0, 5, 7.5, 10].map((v) => (
@@ -328,7 +328,7 @@ export function ScoreField({
                 key={v}
                 type="button"
                 onClick={() => onChange(v)}
-                className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-500 transition hover:bg-amber-500/15 hover:text-amber-600 dark:bg-white/10 dark:text-slate-300"
+                className="rounded-md bg-sunken px-1.5 py-0.5 text-[11px] font-black text-muted transition hover:bg-warn/15 hover:text-warn-ink  "
               >
                 {formatScore(v)}
               </button>
@@ -337,7 +337,7 @@ export function ScoreField({
         </div>
       )}
       {err && (
-        <p className="text-[11px] font-bold text-rose-500">
+        <p className="text-[11px] font-bold text-danger-ink">
           عدد نمره معتبر نیست — بین ۰ تا ۱۰ (مثلاً ۷٫۵) وارد کنید
         </p>
       )}
@@ -356,7 +356,7 @@ export function ColorDots({ colors, value, onChange }: { colors: string[]; value
           aria-label={`رنگ ${c}`}
           className={cx(
             'grid h-9 w-9 place-items-center rounded-full transition-all',
-            value === c ? 'scale-110 ring-2 ring-slate-400 ring-offset-2 dark:ring-offset-slate-900' : 'opacity-80 hover:scale-105',
+            value === c ? 'scale-110 ring-2 ring-line-strong ring-offset-2 ' : 'opacity-80 hover:scale-105',
           )}
           style={{ background: c }}
         >
@@ -483,13 +483,13 @@ function TaskForm({ onClose, edit, presetDue, presetBacklog }: Omit<TaskModalPro
             }}
             inputMode="numeric"
             dir="ltr"
-            className={cx(inputCls, 'tabular text-center')}
+            className={cx(inputCls, 'num text-center')}
           />
         </Field>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="زمان واقعی صرف‌شده (دقیقه — اختیاری)">
-          <input value={actualTxt} onChange={(e) => setActualTxt(e.target.value.replace(/[^0-9۰-۹]/g, ''))} inputMode="numeric" placeholder="مثلاً ۹۰" className={cx(inputCls, 'tabular')} />
+          <input value={actualTxt} onChange={(e) => setActualTxt(e.target.value.replace(/[^0-9۰-۹]/g, ''))} inputMode="numeric" placeholder="مثلاً ۹۰" className={cx(inputCls, 'num')} />
         </Field>
         <Field label="یادداشت / نتیجه (اختیاری)">
           <input value={result} onChange={(e) => setResult(e.target.value)} placeholder="نتیجه انجام…" className={inputCls} />
@@ -497,7 +497,7 @@ function TaskForm({ onClose, edit, presetDue, presetBacklog }: Omit<TaskModalPro
       </div>
       {(state.taskCats ?? []).length > 0 && (
         <div>
-          <span className="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">دسته (اختیاری)</span>
+          <span className="mb-1.5 block text-xs font-bold text-ink-2 ">دسته (اختیاری)</span>
           <div className="flex flex-wrap gap-1.5">
             {(state.taskCats ?? []).map((c) => {
               const on = tagsTxt.split(/[،,]/).map((t) => t.trim()).includes(c.name);
@@ -511,7 +511,7 @@ function TaskForm({ onClose, edit, presetDue, presetBacklog }: Omit<TaskModalPro
                   }}
                   className={cx(
                     'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition',
-                    on ? 'border-transparent text-white' : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-white/10 dark:text-slate-300',
+                    on ? 'border-transparent text-white' : 'border-line text-muted hover:border-line-strong  ',
                   )}
                   style={on ? { background: c.color } : undefined}
                 >
@@ -523,22 +523,22 @@ function TaskForm({ onClose, edit, presetDue, presetBacklog }: Omit<TaskModalPro
           </div>
         </div>
       )}
-      <label className="flex cursor-pointer items-center gap-2 rounded-2xl border border-dashed border-slate-200 px-3.5 py-3 text-xs font-bold text-slate-500 dark:border-white/10 dark:text-slate-400">
-        <input type="checkbox" checked={backlog} onChange={(e) => setBacklog(e.target.checked)} className="h-4 w-4 accent-emerald-600" />
+      <label className="flex cursor-pointer items-center gap-2 rounded-2xl border border-dashed border-line px-3.5 py-3 text-xs font-bold text-muted  ">
+        <input type="checkbox" checked={backlog} onChange={(e) => setBacklog(e.target.checked)} className="h-4 w-4 accent-brand" />
         <span>
           نگه داشتن در بک‌لاگ
-          <span className="block text-[11px] font-normal text-slate-400">کار بدون روز مشخص؛ بعداً با یک کلیک زمان‌بندی‌اش کن</span>
+          <span className="block text-[11px] font-normal text-muted">کار بدون روز مشخص؛ بعداً با یک کلیک زمان‌بندی‌اش کن</span>
         </span>
       </label>
       <div>
-        <span className="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">زیروظایف</span>
-        <div className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/60 p-3 dark:border-white/5 dark:bg-white/[0.02]">
+        <span className="mb-1.5 block text-xs font-bold text-ink-2 ">زیروظایف</span>
+        <div className="space-y-2 rounded-2xl border border-line bg-surface-2 p-3  dark:bg-white/[0.02]">
           {subs.map((s) => (
             <div key={s.id} className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setSubs((p) => p.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)))}
-                className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition', s.done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white dark:border-white/20 dark:bg-transparent')}
+                className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition', s.done ? 'border-brand bg-brand text-white' : 'border-line-strong bg-surface  dark:bg-transparent')}
               >
                 {s.done && <Check size={14} />}
               </button>
@@ -548,7 +548,7 @@ function TaskForm({ onClose, edit, presetDue, presetBacklog }: Omit<TaskModalPro
                 className={cx(inputCls, 'h-9', s.done && 'line-through opacity-60')}
                 placeholder="عنوان زیروظیفه"
               />
-              <button type="button" onClick={() => setSubs((p) => p.filter((x) => x.id !== s.id))} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 hover:bg-rose-500/10 hover:text-rose-500">
+              <button type="button" onClick={() => setSubs((p) => p.filter((x) => x.id !== s.id))} className="grid grid-cols-1 h-9 w-9 shrink-0 place-items-center rounded-xl text-muted hover:bg-danger/10 hover:text-danger-ink">
                 <Trash2 size={15} />
               </button>
             </div>
@@ -573,7 +573,7 @@ function TaskForm({ onClose, edit, presetDue, presetBacklog }: Omit<TaskModalPro
           </div>
         </div>
       </div>
-      {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
+      {err && <p className="rounded-xl bg-danger/10 px-3 py-2 text-xs font-bold text-danger-ink ">{err}</p>}
       <div className="flex justify-end gap-2">
       <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
       <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'افزودن وظیفه'}</Btn>
@@ -638,7 +638,7 @@ function EventForm({ onClose, edit, presetDay }: Omit<EventModalProps, 'open'>) 
       <Field label="رنگ">
         <ColorDots colors={EVENT_COLORS} value={color} onChange={setColor} />
       </Field>
-      {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
+      {err && <p className="rounded-xl bg-danger/10 px-3 py-2 text-xs font-bold text-danger-ink ">{err}</p>}
       <div className="flex justify-end gap-2">
       <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
       <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'افزودن رویداد'}</Btn>
@@ -694,8 +694,8 @@ function HabitForm({ onClose, edit }: Omit<HabitModalProps, 'open'>) {
               type="button"
               onClick={() => setTarget(n)}
               className={cx(
-                'tabular grid h-10 flex-1 place-items-center rounded-xl text-sm font-black transition',
-                target === n ? 'text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300',
+                'num grid h-10 flex-1 place-items-center rounded-xl text-sm font-black transition',
+                target === n ? 'text-white shadow-md' : 'bg-sunken text-muted hover:bg-sunken  ',
               )}
               style={target === n ? { background: color } : undefined}
             >
@@ -704,7 +704,7 @@ function HabitForm({ onClose, edit }: Omit<HabitModalProps, 'open'>) {
           ))}
         </div>
       </Field>
-      {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
+      {err && <p className="rounded-xl bg-danger/10 px-3 py-2 text-xs font-bold text-danger-ink ">{err}</p>}
       <div className="flex justify-end gap-2">
       <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
       <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'افزودن عادت'}</Btn>
@@ -766,15 +766,15 @@ function NoteForm({ onClose, edit }: Omit<NoteModalProps, 'open'>) {
                 type="button"
                 aria-label={`رنگ ${c}`}
                 onClick={() => setColor(c)}
-                className={cx('h-9 w-9 rounded-full border transition-all', color === c ? 'scale-110 border-slate-500 ring-2 ring-slate-300' : 'border-slate-200 hover:scale-105')}
+                className={cx('h-9 w-9 rounded-full border transition-all', color === c ? 'scale-110 border-line-strong ring-2 ring-line-strong' : 'border-line hover:scale-105')}
                 style={{ background: c }}
               />
             ))}
           </div>
         </Field>
       </div>
-      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-        <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="h-4 w-4 accent-emerald-600" />
+      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-ink-2 ">
+        <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="h-4 w-4 accent-brand" />
         سنجاق شود (بالای لیست بماند)
       </label>
       <div className="flex justify-end gap-2">

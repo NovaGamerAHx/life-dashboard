@@ -301,7 +301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={value}>
       {storageWarn && (
-        <div className="fixed bottom-4 left-1/2 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-amber-500/30 bg-amber-50 px-4 py-3 text-xs font-bold leading-6 text-amber-800 shadow-2xl dark:bg-amber-950 dark:text-amber-200">
+        <div className="fixed bottom-24 left-1/2 z-[100] lg:bottom-4 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-amber-500/30 bg-amber-50 px-4 py-3 text-xs font-bold leading-6 text-amber-800 shadow-2xl dark:bg-amber-950 dark:text-amber-200">
           <div className="flex items-start gap-2">
             <span className="flex-1">⚠️ {storageWarn}</span>
             <button

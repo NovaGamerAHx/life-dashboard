@@ -14,9 +14,9 @@ import { taskProgress } from '../lib/stats';
 import { dueTone } from '../components/navBadges';
 
 const COLS: Array<{ k: TaskStatus; tint: string; dot: string }> = [
-  { k: 'todo', tint: 'bg-slate-500/5', dot: 'bg-slate-400' },
-  { k: 'doing', tint: 'bg-sky-500/5', dot: 'bg-sky-500' },
-  { k: 'done', tint: 'bg-emerald-500/5', dot: 'bg-emerald-500' },
+  { k: 'todo', tint: 'bg-muted/10', dot: 'bg-muted' },
+  { k: 'doing', tint: 'bg-info/5', dot: 'bg-info' },
+  { k: 'done', tint: 'bg-brand/5', dot: 'bg-brand' },
 ];
 
 type SortK = 'due' | 'priority' | 'newest';
@@ -107,17 +107,17 @@ export default function Tasks() {
       {/* نوار خلاصه */}
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-4 text-center">
-          <p className="tabular text-xl font-black text-slate-800 dark:text-white">{toFa(total)}</p>
-          <p className="mt-0.5 text-[11px] font-bold text-slate-400">کل وظایف</p>
+          <p className="num text-xl font-black text-ink ">{toFa(total)}</p>
+          <p className="mt-0.5 text-[11px] font-bold text-muted">کل وظایف</p>
         </Card>
         <Card className="p-4 text-center">
-          <p className="tabular text-xl font-black text-emerald-600">{total ? toFa(Math.round((done / total) * 100)) : toFa(0)}٪</p>
-          <p className="mt-0.5 text-[11px] font-bold text-slate-400">نرخ انجام</p>
+          <p className="num text-xl font-black text-brand-ink">{total ? toFa(Math.round((done / total) * 100)) : toFa(0)}٪</p>
+          <p className="mt-0.5 text-[11px] font-bold text-muted">نرخ انجام</p>
           <div className="mx-auto mt-2 max-w-[140px]"><Progress value={total ? (done / total) * 100 : 0} h={6} /></div>
         </Card>
         <Card className="p-4 text-center">
-          <p className={cx('tabular text-xl font-black', overdue > 0 ? 'text-rose-500' : 'text-slate-800 dark:text-white')}>{toFa(overdue)}</p>
-          <p className="mt-0.5 text-[11px] font-bold text-slate-400">عقب‌افتاده</p>
+          <p className={cx('num text-xl font-black', overdue > 0 ? 'text-danger-ink' : 'text-ink ')}>{toFa(overdue)}</p>
+          <p className="mt-0.5 text-[11px] font-bold text-muted">عقب‌افتاده</p>
         </Card>
       </div>
 
@@ -125,7 +125,7 @@ export default function Tasks() {
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[180px] flex-1">
-            <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جست‌وجو در وظایف…" className={cx(inputCls, 'pr-9')} />
           </div>
           <select value={priF} onChange={(e) => setPriF(e.target.value as typeof priF)} className={cx(inputCls, 'w-auto')}>
@@ -156,18 +156,18 @@ export default function Tasks() {
           />
         </Card>
       ) : (
-        <div className="grid items-start gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-3">
           {COLS.map((c) => (
             <div
               key={c.k}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => onDrop(c.k)}
-              className={cx('min-h-[300px] rounded-3xl border border-slate-200/60 p-3 dark:border-white/5', c.tint)}
+              className={cx('min-h-[300px] rounded-3xl border border-line p-3 ', c.tint)}
             >
               <div className="mb-3 flex items-center gap-2 px-1.5">
                 <span className={cx('h-2.5 w-2.5 rounded-full', c.dot)} />
-                <h3 className="text-[13px] font-black text-slate-700 dark:text-slate-200">{STATUS_META[c.k].label}</h3>
-                <span className="tabular rounded-full bg-slate-200/70 px-2 py-0.5 text-[11px] font-black text-slate-500 dark:bg-white/10 dark:text-slate-300">
+                <h3 className="text-[13px] font-black text-ink-2 ">{STATUS_META[c.k].label}</h3>
+                <span className="num rounded-full bg-sunken px-2 py-0.5 text-[11px] font-black text-muted  ">
                   {toFa(byStatus[c.k].length)}
                 </span>
               </div>
@@ -194,7 +194,7 @@ export default function Tasks() {
                   ))}
                 </AnimatePresence>
                 {byStatus[c.k].length === 0 && (
-                  <p className="rounded-2xl border border-dashed border-slate-200 py-6 text-center text-[11px] text-slate-400 dark:border-white/10">
+                  <p className="rounded-2xl border border-dashed border-line py-6 text-center text-[11px] text-muted ">
                     {c.k === 'done' ? 'هنوز کاری تمام نشده — بجنب! 💪' : 'خالی — وظیفه را اینجا رها کن'}
                   </p>
                 )}
@@ -204,7 +204,7 @@ export default function Tasks() {
         </div>
       )}
 
-      <p className="hidden text-center text-[11px] text-slate-400 md:block">💡 راهنما: کارت‌ها را بین ستون‌ها بکش و رها کن • دابل‌کلیک روی عنوان = ویرایش درجا • کلید N = تسک جدید</p>
+      <p className="hidden text-center text-[11px] text-muted md:block">💡 راهنما: کارت‌ها را بین ستون‌ها بکش و رها کن • دابل‌کلیک روی عنوان = ویرایش درجا • کلید N = تسک جدید</p>
 
       <TaskModal open={showM} onClose={() => setShowM(false)} edit={edit} />
       <Confirm open={confirmId != null} onClose={() => setConfirmId(null)} onYes={() => confirmId && deleteTask(confirmId)} title="حذف وظیفه؟" desc="وظیفه و زیروظایف آن حذف می‌شوند." />
@@ -236,10 +236,10 @@ function TaskCard({
   const tone = dueTone(t.due, t.status);
   const dueLabel = t.due == null ? 'بدون سررسید' : t.status === 'done' ? smartDate(t.due) : smartDueFull(t);
   const toneCls: Record<string, string> = {
-    red: 'bg-rose-500/10 text-rose-600 dark:text-rose-300',
-    amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-300',
-    slate: 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300',
-    green: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
+    red: 'bg-danger/10 text-danger-ink ',
+    amber: 'bg-warn/10 text-warn-ink ',
+    slate: 'bg-sunken text-muted  ',
+    green: 'bg-brand/10 text-brand-ink ',
   };
   const pri = PRIORITY_META[t.priority];
 
@@ -258,14 +258,14 @@ function TaskCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className={cx(
-        'rounded-2xl border bg-white p-3.5 shadow-sm dark:bg-slate-900',
-        t.status === 'done' ? 'border-emerald-500/20' : tone === 'red' ? 'border-rose-500/25' : 'border-slate-200/80 dark:border-white/10',
+        'rounded-2xl border bg-surface p-3.5 shadow-sm ',
+        t.status === 'done' ? 'border-brand/20' : tone === 'red' ? 'border-danger/25' : 'border-line ',
       )}
     >
       <div className="flex items-start gap-2">
         <button onClick={cycle} title="تغییر وضعیت" className={cx(
           'mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 transition',
-          t.status === 'done' ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 hover:border-emerald-500 dark:border-white/20',
+          t.status === 'done' ? 'border-brand bg-brand text-white' : 'border-line-strong hover:border-brand ',
         )}>
           {t.status === 'done' && <Check size={13} strokeWidth={3.5} />}
         </button>
@@ -287,34 +287,34 @@ function TaskCard({
             <p
               onDoubleClick={onStartInline}
               title="دابل‌کلیک برای ویرایش درجا"
-              className={cx('cursor-text text-[13px] font-extrabold leading-6', t.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-100')}
+              className={cx('cursor-text text-[13px] font-extrabold leading-6', t.status === 'done' ? 'text-muted line-through' : 'text-ink ')}
             >
               {t.title}
             </p>
           )}
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <span className={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold', toneCls[tone])}>
+            <span className={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold', toneCls[tone])}>
               <CalendarClock size={10} />
               {dueLabel}
             </span>
             {t.time && (
-              <span className="tabular inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-white/10 dark:text-slate-300" dir="ltr">
+              <span className="num inline-flex items-center gap-1 rounded-full bg-sunken px-2 py-0.5 text-[11px] font-bold text-muted  " dir="ltr">
                 {t.time}
               </span>
             )}
-            <span className={cx('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold', pri.bg, pri.color)}>
+            <span className={cx('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold', pri.bg, pri.color)}>
               <Flag size={10} />
               {pri.label}
             </span>
           </div>
         </div>
-        <span className="cursor-grab text-slate-300 active:cursor-grabbing" title="بکش و رها کن"><GripVertical size={15} /></span>
+        <span className="cursor-grab text-muted active:cursor-grabbing" title="بکش و رها کن"><GripVertical size={15} /></span>
       </div>
 
       {t.tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {t.tags.map((tag) => (
-            <span key={tag} className="inline-flex items-center gap-0.5 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-white/5 dark:text-slate-400">
+            <span key={tag} className="inline-flex items-center gap-0.5 rounded-md bg-sunken px-1.5 py-0.5 text-[11px] font-bold text-muted  ">
               <Tag size={9} />{tag}
             </span>
           ))}
@@ -323,16 +323,16 @@ function TaskCard({
 
       {t.subtasks.length > 0 && (
         <div className="mt-2.5">
-          <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
+          <div className="flex items-center justify-between text-[11px] font-bold text-muted">
             <span>پیشرفت زیروظایف</span>
-            <span className="tabular">{toFa(pct)}٪</span>
+            <span className="num">{toFa(pct)}٪</span>
           </div>
           <div className="mt-1"><Progress value={pct} h={5} color={t.status === 'done' ? '#10b981' : '#0ea5e9'} /></div>
         </div>
       )}
 
       {(t.desc || t.subtasks.length > 0) && (
-        <button onClick={onToggleExpand} className="mt-2 flex items-center gap-1 text-[11px] font-bold text-slate-400 transition hover:text-emerald-600">
+        <button onClick={onToggleExpand} className="mt-2 flex items-center gap-1 text-[11px] font-bold text-muted transition hover:text-brand-ink">
           <motion.span animate={{ rotate: expanded ? 180 : 0 }}><ChevronDown size={13} /></motion.span>
           {expanded ? 'بستن جزئیات' : 'نمایش جزئیات'}
         </button>
@@ -342,16 +342,16 @@ function TaskCard({
         {expanded && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="space-y-2 pt-2">
-              {t.desc && <p className="rounded-xl bg-slate-50 p-2.5 text-[11px] leading-6 text-slate-500 dark:bg-white/5 dark:text-slate-400">{t.desc}</p>}
+              {t.desc && <p className="rounded-xl bg-surface-2 p-2.5 text-[11px] leading-6 text-muted  ">{t.desc}</p>}
               {t.subtasks.map((s) => (
                 <label key={s.id} className="flex cursor-pointer items-center gap-2 text-xs">
                   <input
                     type="checkbox"
                     checked={s.done}
                     onChange={() => updateTask(t.id, { subtasks: t.subtasks.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)) })}
-                    className="h-4 w-4 accent-emerald-600"
+                    className="h-4 w-4 accent-brand"
                   />
-                  <span className={cx('flex-1 font-bold', s.done ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-300')}>{s.title}</span>
+                  <span className={cx('flex-1 font-bold', s.done ? 'text-muted line-through' : 'text-ink-2 ')}>{s.title}</span>
                 </label>
               ))}
             </div>
@@ -359,7 +359,7 @@ function TaskCard({
         )}
       </AnimatePresence>
 
-      <div className="mt-2.5 flex items-center justify-between border-t border-slate-50 pt-2 dark:border-white/5">
+      <div className="mt-2.5 flex items-center justify-between border-t border-line pt-2 ">
         <div className="flex gap-0.5">
           {t.status !== 'todo' && <QuickMove label="→ نشده" onClick={() => moveTask(t.id, 'todo')} />}
           {t.status !== 'doing' && <QuickMove label="→ در حال انجام" onClick={() => moveTask(t.id, 'doing')} />}
@@ -369,10 +369,10 @@ function TaskCard({
           )}
         </div>
         <div className="flex gap-0.5">
-          <button onClick={onEdit} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-sky-500/10 hover:text-sky-600" title="ویرایش">
+          <button onClick={onEdit} className="grid grid-cols-1 h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-info/10 hover:text-info-ink" title="ویرایش">
             <Pencil size={13} />
           </button>
-          <button onClick={onDelete} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-500/10 hover:text-rose-500" title="حذف">
+          <button onClick={onDelete} className="grid grid-cols-1 h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-danger/10 hover:text-danger-ink" title="حذف">
             <Trash2 size={13} />
           </button>
         </div>
@@ -383,7 +383,7 @@ function TaskCard({
 
 function QuickMove({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="rounded-lg px-1.5 py-1 text-[10px] font-bold text-slate-400 transition hover:bg-emerald-500/10 hover:text-emerald-600">
+    <button onClick={onClick} className="rounded-lg px-1.5 py-1 text-[11px] font-bold text-muted transition hover:bg-brand/10 hover:text-brand-ink">
       {label}
     </button>
   );

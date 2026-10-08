@@ -28,7 +28,11 @@ function readEntries(): AutoEntry[] {
     if (!raw) return [];
     const arr = JSON.parse(raw) as AutoEntry[];
     if (!Array.isArray(arr)) return [];
-    return arr.filter((e) => e && typeof e.ts === 'number' && e.data && (e.data as AppState).version === 1);
+    return arr.filter((e) => {
+      if (!e || typeof e.ts !== 'number' || !e.data) return false;
+      const v = (e.data as { version?: unknown }).version;
+      return v === 1 || v === 2; // داده‌های نسخه‌های پیشین هم قابل بازیابی‌اند
+    });
   } catch {
     return [];
   }
@@ -48,10 +52,10 @@ export function toMeta(e: AutoEntry): AutoBackupMeta {
   return {
     ts: e.ts,
     size: JSON.stringify(d).length,
-    tasks: d.tasks?.length ?? 0,
-    events: d.events?.length ?? 0,
-    habits: d.habits?.length ?? 0,
-    notes: d.notes?.length ?? 0,
+    tasks: d.tasks.length,
+    events: d.events.length,
+    habits: d.habits.length,
+    notes: d.notes.length,
     reflections: (d.reflections ?? []).length,
   };
 }
@@ -71,8 +75,11 @@ export function maybeAutoSnapshot(state: AppState): AutoBackupMeta[] {
   const list = readEntries().sort((a, b) => a.ts - b.ts);
   const desc = () => [...list].reverse().map(toMeta);
   const hasData =
-    state.tasks.length + state.events.length + state.habits.length + state.notes.length +
-      (state.reflections?.length ?? 0) >
+    state.tasks.length +
+      state.events.length +
+      state.habits.length +
+      state.notes.length +
+      (state.reflections ?? []).length >
     0;
   if (!hasData) return desc();
   const now = Date.now();

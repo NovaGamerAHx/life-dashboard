@@ -7,8 +7,9 @@ import {
 import { useApp } from '../lib/store';
 import { PRIORITY_META, type Task, type TaskPriority } from '../lib/types';
 import { Card, Btn, Badge, Empty, inputCls, Confirm, Segmented } from '../components/ui';
-import { TaskModal, JalaliDateField, eisenColor, eisenLabel, eisenOf } from '../components/forms';
-import { CheckIcon } from './Dashboard';
+import { TaskModal, JalaliDateField } from '../components/forms';
+import { eisenColor, eisenLabel, eisenOf } from '../lib/eisen';
+import { CheckIcon } from '../components/ui';
 import { cx } from '../lib/utils';
 import { toFa, formatJalali, formatJalaliShort, todayStart, addDays, startOfDay } from '../lib/jalali';
 

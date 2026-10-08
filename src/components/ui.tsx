@@ -1,14 +1,13 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { cx } from '../lib/utils';
-import { clockToFa, formatClockLatin, formatScore, normalizeClockText, parseClock } from '../lib/jalali';
 
 export function Card({ children, className, hover }: { children: ReactNode; className?: string; hover?: boolean }) {
   return (
     <div
       className={cx(
-        'min-w-0 rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgb(15_23_42/0.05)] dark:border-white/10 dark:bg-slate-900',
+        'rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgb(15_23_42/0.05)] dark:border-white/10 dark:bg-slate-900',
         hover && 'transition-all hover:shadow-lg hover:-translate-y-0.5',
         className,
       )}
@@ -20,8 +19,8 @@ export function Card({ children, className, hover }: { children: ReactNode; clas
 
 export function CardHead({ title, sub, action }: { title: string; sub?: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5 pb-3">
-      <div className="min-w-0">
+    <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+      <div>
         <h3 className="text-[15px] font-extrabold text-slate-800 dark:text-slate-100">{title}</h3>
         {sub && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{sub}</p>}
       </div>
@@ -58,13 +57,10 @@ export function Btn({
   return (
     <button
       type={type ?? 'button'}
-      title={title}
       disabled={disabled}
       onClick={onClick}
-      className={cx(
-        'inline-flex items-center justify-center gap-1.5 font-bold transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50',
-        v, s, className,
-      )}
+      title={title}
+      className={cx('inline-flex items-center justify-center gap-1.5 font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none', v, s, className)}
     >
       {children}
     </button>
@@ -147,7 +143,7 @@ export function Modal({
                 <h3 className="text-[15px] font-extrabold text-slate-900 dark:text-white">{title}</h3>
                 {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
               </div>
-              <button onClick={onClose} aria-label="بستن" className="grid h-8 w-8 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white">
+              <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white">
                 <X size={17} />
               </button>
             </div>
@@ -187,25 +183,20 @@ export function Badge({ children, tone = 'slate' }: { children: ReactNode; tone?
 }
 
 export function Segmented<T extends string>({
-  options, value, onChange, className, size = 'md',
+  options, value, onChange,
 }: {
   options: Array<{ v: T; label: string; icon?: ReactNode }>;
   value: T;
   onChange: (v: T) => void;
-  className?: string;
-  size?: 'sm' | 'md';
 }) {
   return (
-    <div className={cx('inline-flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/5', className)}>
+    <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/5">
       {options.map((o) => (
         <button
           key={o.v}
-          type="button"
           onClick={() => onChange(o.v)}
-          aria-pressed={value === o.v}
           className={cx(
-            'flex items-center gap-1.5 rounded-xl font-bold transition-all',
-            size === 'sm' ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs',
+            'flex h-8 items-center gap-1.5 rounded-xl px-3 text-xs font-bold transition-all',
             value === o.v
               ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white'
               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100',
@@ -219,68 +210,91 @@ export function Segmented<T extends string>({
   );
 }
 
-export function Toggle({
-  checked, onChange, label,
+/** تیک سفید — در دکمه‌های گرد وضعیت استفاده می‌شود */
+export function CheckIcon({ size = 14, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+/** کلید روشن/خاموش */
+export function Switch({
+  checked, onChange, label, size = 'md',
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
-  label: ReactNode;
+  label?: string;
+  size?: 'sm' | 'md';
 }) {
+  const dims = size === 'sm'
+    ? { track: 'h-5 w-9', knob: 'h-4 w-4', on: 'right-0.5', off: 'right-[18px]' }
+    : { track: 'h-6 w-11', knob: 'h-5 w-5', on: 'right-0.5', off: 'right-[22px]' };
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={label}
       onClick={() => onChange(!checked)}
       className={cx(
-        'flex w-full items-center gap-3 rounded-2xl border-2 px-3.5 py-3 text-right transition',
-        checked ? 'border-emerald-500 bg-emerald-500/5' : 'border-slate-100 hover:border-slate-200 dark:border-white/5',
+        'relative shrink-0 rounded-full border transition-colors',
+        dims.track,
+        checked
+          ? 'border-emerald-500 bg-emerald-500'
+          : 'border-slate-200 bg-slate-200 dark:border-white/10 dark:bg-white/15',
       )}
     >
       <span
         className={cx(
-          'relative h-6 w-11 shrink-0 rounded-full transition',
-          checked ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-white/15',
+          'absolute top-1/2 -translate-y-1/2 rounded-full bg-white shadow transition-all',
+          dims.knob,
+          checked ? dims.on : dims.off,
         )}
-      >
-        <span
-          className={cx(
-            'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all',
-            checked ? 'right-0.5' : 'right-[22px]',
-          )}
-        />
-      </span>
-      <span className="min-w-0 flex-1">{label}</span>
+      />
     </button>
   );
 }
 
-export function CheckPill({
-  checked, onChange, children,
+/** برچسب قابل انتخاب (فیلتر/گزینه) */
+export function Chip({
+  active, onClick, children, tone = 'emerald', title,
 }: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
+  active?: boolean;
+  onClick?: () => void;
   children: ReactNode;
+  tone?: 'emerald' | 'slate' | 'amber' | 'violet';
+  title?: string;
 }) {
+  const tones: Record<string, string> = {
+    emerald: 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    slate: 'border-slate-400 bg-slate-500/10 text-slate-700 dark:text-slate-200',
+    amber: 'border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    violet: 'border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+  };
   return (
     <button
       type="button"
-      aria-pressed={checked}
-      onClick={() => onChange(!checked)}
+      title={title}
+      onClick={onClick}
       className={cx(
-        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition',
-        checked
-          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-          : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-white/10 dark:text-slate-400',
+        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition active:scale-[0.97]',
+        active
+          ? tones[tone]
+          : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5',
       )}
     >
-      <span className={cx('grid h-3.5 w-3.5 place-items-center rounded-[5px] border', checked ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-white/20')}>
-        {checked && (
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        )}
-      </span>
       {children}
     </button>
   );
@@ -294,182 +308,5 @@ export function Confirm({ open, onClose, onYes, title, desc }: { open: boolean; 
         <Btn variant="danger" onClick={() => { onYes(); onClose(); }}>حذف شود</Btn>
       </div>
     </Modal>
-  );
-}
-
-/**
- * فیلد ساعت — همیشه ۲۴ساعته (۰۰:۰۰ تا ۲۳:۵۹)، بدون AM/PM.
- * ورودی دستی می‌پذیرد (با ارقام فارسی یا لاتین) و با کلیدهای بالا/پایین هم تنظیم می‌شود.
- */
-export function TimeField({
-  value, onChange, allowEmpty = true, className, placeholder = '۲۲:۳۰', ariaLabel,
-}: {
-  /** مقدار ذخیره‌شده به شکل «HH:MM» یا '' */
-  value: string;
-  onChange: (v: string) => void;
-  allowEmpty?: boolean;
-  className?: string;
-  placeholder?: string;
-  ariaLabel?: string;
-}) {
-  const [txt, setTxt] = useState(() => (value ? clockToFa(value) : ''));
-  const [invalid, setInvalid] = useState(false);
-  const focused = useRef(false);
-
-  useEffect(() => {
-    if (!focused.current) setTxt(value ? clockToFa(value) : '');
-  }, [value]);
-
-  const commit = (raw: string) => {
-    const trimmed = raw.trim();
-    if (!trimmed) {
-      setInvalid(false);
-      onChange('');
-      return;
-    }
-    const norm = normalizeClockText(trimmed);
-    if (!norm) {
-      setInvalid(true);
-      return;
-    }
-    setInvalid(false);
-    setTxt(clockToFa(norm));
-    onChange(norm);
-  };
-
-  const step = (deltaMin: number) => {
-    const cur = parseClock(value || '') ?? 12 * 60;
-    const next = ((cur + deltaMin) % 1440 + 1440) % 1440;
-    const norm = formatClockLatin(next);
-    setTxt(clockToFa(norm));
-    setInvalid(false);
-    onChange(norm);
-  };
-
-  return (
-    <div className={cx('relative', className)}>
-      <input
-        aria-label={ariaLabel}
-        inputMode="numeric"
-        dir="ltr"
-        value={txt}
-        placeholder={placeholder}
-        onFocus={() => { focused.current = true; }}
-        onChange={(e) => setTxt(e.target.value)}
-        onBlur={(e) => {
-          focused.current = false;
-          const t = e.target.value.trim();
-          if (!t && allowEmpty) { setInvalid(false); onChange(''); return; }
-          commit(t);
-          if (!normalizeClockText(t)) setTxt(value ? clockToFa(value) : '');
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') { e.preventDefault(); commit(txt); }
-          else if (e.key === 'ArrowUp') { e.preventDefault(); step(15); }
-          else if (e.key === 'ArrowDown') { e.preventDefault(); step(-15); }
-        }}
-        className={cx(
-          inputCls, 'tabular pl-9 text-center',
-          invalid && 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/10',
-        )}
-      />
-      <span className="absolute left-1.5 top-1/2 flex -translate-y-1/2 flex-col gap-0.5">
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label="یک ربع بعد"
-          onClick={() => step(15)}
-          className="grid h-4 w-6 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-white/10"
-        >
-          <ChevronUp size={12} />
-        </button>
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label="یک ربع قبل"
-          onClick={() => step(-15)}
-          className="grid h-4 w-6 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-white/10"
-        >
-          <ChevronDown size={12} />
-        </button>
-      </span>
-      {invalid && (
-        <span className="mt-1 block text-[10px] font-bold text-rose-500">ساعت ۲۴ساعته بنویسید؛ مثل ۰۹:۳۰ یا ۲۲:۱۵</span>
-      )}
-    </div>
-  );
-}
-
-/** نمایش ساعت ذخیره‌شده به شکل ۲۴ساعته فارسی */
-export function ClockText({ value, className }: { value?: string; className?: string }) {
-  if (!value) return <span className={cx('text-slate-400', className)}>ثبت نشده</span>;
-  return <span className={cx('tabular', className)}>{clockToFa(value)}</span>;
-}
-
-/** نمایش نمره با یک رقم اعشار */
-export function ScorePill({ score, className }: { score: number | null | undefined; className?: string }) {
-  if (score == null) {
-    return (
-      <span className={cx('rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-400 dark:bg-white/5', className)}>
-        ثبت نشده
-      </span>
-    );
-  }
-  const tone = score >= 8 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-    : score >= 5 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-      : 'bg-rose-500/15 text-rose-700 dark:text-rose-300';
-  return (
-    <span className={cx('tabular inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black', tone, className)}>
-      {formatScore(score)}
-      <span className="text-[9px] font-bold opacity-70">از ۱۰</span>
-    </span>
-  );
-}
-
-/** هدر جمع‌شدنی برای بخش‌های طولانی */
-export function Collapsible({
-  title, sub, children, defaultOpen = false, icon,
-}: {
-  title: string;
-  sub?: string;
-  children: ReactNode;
-  defaultOpen?: boolean;
-  icon?: ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  const id = useId();
-  return (
-    <div className="rounded-2xl border border-slate-100 dark:border-white/5">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={id}
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2.5 px-4 py-3 text-right"
-      >
-        {icon}
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-extrabold text-slate-700 dark:text-slate-200">{title}</span>
-          {sub && <span className="block text-[11px] text-slate-400">{sub}</span>}
-        </span>
-        <motion.span animate={{ rotate: open ? 180 : 0 }} className="text-slate-400">
-          <ChevronDown size={16} />
-        </motion.span>
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            id={id}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="px-4 pb-4">{children}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
   );
 }

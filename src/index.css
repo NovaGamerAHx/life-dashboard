@@ -81,6 +81,28 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: rgb(16 185 129 / 0.28);
 }
 
+/* ---- کارت‌های شیشه‌ای و گذار صفحه ---- */
+.glass {
+  background: rgb(255 255 255 / 0.72);
+  backdrop-filter: blur(14px);
+}
+.dark .glass {
+  background: rgb(15 23 42 / 0.72);
+}
+
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-in { animation: page-in 0.24s ease-out both; }
+
+/* نوار پیشرفت مینیمال برای مرورگرهای WebKit */
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* اعداد فارسی در فرم‌ها هم تراز و خوانا باشند */
+.tabular input,
+.tabular select { font-variant-numeric: tabular-nums; }
+
 /* فوکوس قابل مشاهده برای دسترس‌پذیری بهتر با کیبورد */
 :focus-visible {
   outline: 2px solid #10b981;

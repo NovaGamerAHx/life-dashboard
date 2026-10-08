@@ -1,3 +1,5 @@
+import { toFa } from './jalali';
+
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ');
 }
@@ -8,11 +10,6 @@ export function uid(prefix = 'id'): string {
 
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
-}
-
-/** گرد کردن به یک رقم اعشار (برای نمره‌های روز) */
-export function round1(n: number): number {
-  return Math.round(n * 10) / 10;
 }
 
 export function downloadJson(filename: string, data: unknown): void {
@@ -42,7 +39,7 @@ export function readJsonFile(file: File): Promise<unknown> {
   });
 }
 
-/** تولید اعداد شبه‌تصادفی پایدار برای داده نمایشی و انتخاب روزها */
+/** تولید اعداد شبه‌تصادفی پایدار برای داده نمایشی */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -54,39 +51,16 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-/** انتخاب تصادفی n عضو از یک آرایه (بدون تکرار، ترتیب تصادفی) */
-export function sampleRandom<T>(items: T[], n: number): T[] {
-  const arr = [...items];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+/** کوتاه‌سازی اعداد بزرگ برای نمودارها با ارقام فارسی: «۱۲٫۵ هزار» */
+export function compactFa(v: number): string {
+  const fa = (n: number) => toFa(n);
+  if (v >= 1_000_000) {
+    const m = v / 1_000_000;
+    return `${fa(Number.isInteger(m) ? m : Number(m.toFixed(1)))} م`;
   }
-  return arr.slice(0, Math.max(0, Math.min(n, arr.length)));
-}
-
-/** کپی متن در کلیپ‌بورد با پشتیبانی از مرورگرهای قدیمی‌تر */
-export async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* سراغ روش جایگزین می‌رویم */
+  if (v >= 1_000) {
+    const k = v / 1_000;
+    return `${fa(Number.isInteger(k) ? k : Number(k.toFixed(1)))} هـ`;
   }
-  try {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.top = '-1000px';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    return ok;
-  } catch {
-    return false;
-  }
+  return fa(v);
 }

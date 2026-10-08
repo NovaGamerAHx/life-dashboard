@@ -4,13 +4,14 @@ import {
   Trash2, ShieldCheck, Moon, Sun, Monitor, Check, Tags, Repeat, Plus, Pencil, BellRing,
   CalendarDays, History, HardDrive, ClipboardPaste, Archive, ArchiveRestore, FileUp,
 } from 'lucide-react';
-import { useApp, validateBackup } from '../lib/store';
+import { useApp } from '../lib/store';
+import { validateBackup } from '../lib/sanitize';
 import type { AppState, ThemeMode } from '../lib/types';
 import { TASK_CAT_COLORS, type Habit } from '../lib/types';
-import { Card, CardHead, Btn, Field, inputCls, Confirm, Segmented, Modal, Progress, Badge, TimeField } from '../components/ui';
-import { ColorDots, HabitModal } from '../components/forms';
+import { Card, CardHead, Btn, Field, inputCls, Confirm, Segmented, Modal, Progress, Badge } from '../components/ui';
+import { ColorDots, HabitModal, TimeField } from '../components/forms';
 import { downloadJson, readJsonFile, cx } from '../lib/utils';
-import { toFa, formatJalali, formatTime, clockToFa } from '../lib/jalali';
+import { toFa, formatJalali, formatTime, formatClock24 } from '../lib/jalali';
 import { formatBytes, backupFilename } from '../lib/backup';
 
 export default function Settings() {
@@ -52,8 +53,7 @@ export default function Settings() {
     { l: 'رویداد', v: state.events.length },
     { l: 'عادت', v: state.habits.length },
     { l: 'یادداشت', v: state.notes.length },
-    { l: 'بازتاب روز', v: (state.reflections ?? []).length },
-    { l: 'روز نمره‌دار', v: (state.reflections ?? []).filter((r) => r.score != null).length },
+    { l: 'بازتاب', v: (state.reflections ?? []).length },
   ];
 
   const doExport = () => {
@@ -403,11 +403,8 @@ export default function Settings() {
             <Database size={22} />
           </div>
           <div>
-            <h3 className="text-sm font-black text-slate-800 dark:text-white">میزکار زندگی — نسخه ۳٫۰</h3>
-            <p className="mt-0.5 text-[11px] leading-5 text-slate-400">
-              مدیریت یکپارچه وظایف، تقویم شمسی، عادت‌ها، یادداشت‌ها، نمره‌ها و خلاصه‌های روزانه • تمام ساعت‌ها ۲۴ساعته •
-              کاملاً آفلاین • ساخته‌شده با ❤️ برای زندگی منظم‌تر
-            </p>
+            <h3 className="text-sm font-black text-slate-800 dark:text-white">میزکار زندگی — نسخه ۲٫۱</h3>
+            <p className="mt-0.5 text-[11px] leading-5 text-slate-400">مدیریت یکپارچه وظایف، تقویم شمسی، عادت‌ها، یادداشت‌ها و تحلیل نمره روزها • کاملاً آفلاین • ساخته‌شده با ❤️ برای زندگی منظم‌تر</p>
           </div>
         </div>
       </Card>
@@ -453,8 +450,7 @@ export default function Settings() {
                 { l: 'رویداد', v: preview.events.length },
                 { l: 'عادت', v: preview.habits.length },
                 { l: 'یادداشت', v: preview.notes.length },
-                { l: 'بازتاب روز', v: (preview.reflections ?? []).length },
-                { l: 'روز نمره‌دار', v: (preview.reflections ?? []).filter((r) => r.score != null).length },
+                { l: 'بازتاب', v: (preview.reflections ?? []).length },
               ].map((c) => (
                 <span key={c.l} className="tabular rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:bg-white/10 dark:text-slate-200">
                   {c.l}: {toFa(c.v)}
@@ -552,11 +548,13 @@ function ReminderCard() {
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-amber-500/10 text-amber-500"><BellRing size={20} /></span>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-black text-slate-700 dark:text-slate-200">
-            {perm === 'unsupported' ? 'مرورگر شما اعلان پشتیبانی نمی‌کند' : enabled ? `یادآوری فعال — هر شب ساعت ${clockToFa(time)} (۲۴ساعته)` : 'یادآوری غیرفعال است'}
+            {perm === 'unsupported' ? 'مرورگر شما اعلان پشتیبانی نمی‌کند' : enabled ? `یادآوری فعال — هر شب ساعت ${formatClock24(time)} (۲۴ ساعته)` : 'یادآوری غیرفعال است'}
           </p>
           <p className="mt-0.5 text-[11px] text-slate-400">تب برنامه باید باز باشد تا اعلان نمایش داده شود</p>
         </div>
-        <TimeField value={time} onChange={changeTime} className="w-28" ariaLabel="ساعت یادآوری" placeholder="۲۲:۰۰" allowEmpty={false} />
+        <div className="w-36">
+          <TimeField value={time} onChange={changeTime} />
+        </div>
         <Segmented value={enabled ? 'on' : 'off'} onChange={(v) => { if ((v === 'on') !== enabled) toggle(); }} options={[{ v: 'off', label: 'خاموش' }, { v: 'on', label: 'روشن' }]} />
       </div>
     </Card>

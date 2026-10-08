@@ -1,276 +1,252 @@
+import type { DayStat } from './days';
 import {
-  clockToFa, formatJalali, formatJalaliShort, formatScore, parseClock, toFa, weekdayName,
+  formatDurationFa, rollupDays, scoreStats,
+} from './days';
+import {
+  formatClock24, formatGregorianIso, formatJalali, formatJalaliFull,
+  formatJalaliShort, formatScore, toFa,
 } from './jalali';
-import { formatDurationFa, habitsDoneOn, inRange, reflectionMap, sleepDurationMin } from './stats';
-import { moodFace, moodLabel, type DayReflection, type Habit, type Task } from './types';
+import { EMPTY, moodLabel, orEmpty, scoreGrade } from './display';
+import { exportRowsCsv } from './stats';
 
-/** متن جانشین برای داده‌های ثبت‌نشده — همه‌جای خروجی متنی صریح است */
-export const NOT_RECORDED = 'ثبت نشده';
-export const EMPTY_TEXT = 'خالی';
-
+/** گزینه‌های ساخت خروجی متنی/CSV از روزها */
 export interface SummaryOptions {
-  /** نمره روز در خروجی باشد یا نه */
+  /** شامل نمره روز */
   includeScore: boolean;
-  mood: boolean;
-  /** خواب/بیداری، ورزش و بیرون رفتن */
-  basics: boolean;
-  /** وضعیت تسک‌ها و عادت‌های آن روز */
-  progress: boolean;
-  dayNote: boolean;
-  wins: boolean;
-  improve: boolean;
-  lessons: boolean;
-  gratitude: boolean;
-  style: 'plain' | 'markdown';
-  /** سرصفحه (تاریخ و نشانه‌گذاری) */
-  header: boolean;
+  /** شامل حال روز (اموجی و مقدار) */
+  includeMood: boolean;
+  /** شامل توضیحات/یادداشت آزاد روز */
+  includeNote: boolean;
+  /** شامل بخش بازتاب: دستاوردها، قابل بهبود، درس، قدردانی */
+  includeReflection: boolean;
+  /** شامل خواب، ورزش و بیرون رفتن */
+  includeBasics: boolean;
+  /** شامل وضعیت عادت‌ها */
+  includeHabits: boolean;
+  /** شامل تسک‌های روز */
+  includeTasks: boolean;
+  /** شامل رویدادهای روز */
+  includeEvents: boolean;
+  /** موارد خالی با عبارت «ثبت نشده» نوشته شوند (در غیر این صورت حذف می‌شوند) */
+  showEmpty: boolean;
+  /** خلاصه آماری در ابتدای متن */
+  includeStats: boolean;
+  /** عنوان و بازه در ابتدای متن */
+  includeHeader: boolean;
 }
 
 export const DEFAULT_SUMMARY_OPTIONS: SummaryOptions = {
   includeScore: true,
-  mood: true,
-  basics: true,
-  progress: true,
-  dayNote: true,
-  wins: true,
-  improve: true,
-  lessons: true,
-  gratitude: true,
-  style: 'plain',
-  header: true,
+  includeMood: true,
+  includeNote: true,
+  includeReflection: true,
+  includeBasics: true,
+  includeHabits: true,
+  includeTasks: false,
+  includeEvents: false,
+  showEmpty: true,
+  includeStats: true,
+  includeHeader: true,
 };
 
-export interface SummaryContext {
-  reflections: DayReflection[];
-  tasks: Task[];
-  habits: Habit[];
-  habitLogs: Record<string, boolean>;
-}
+export const LINE = '────────────────────────────';
 
-function emptyText(v?: string | null): string {
-  const t = (v ?? '').trim();
-  return t ? t : EMPTY_TEXT;
-}
+const num = (v: number): string => toFa(v);
 
-function boolText(v: boolean | undefined, extra?: string): string {
-  if (v !== true) return NOT_RECORDED;
-  const e = (extra ?? '').trim();
-  return e ? `بله — ${e}` : 'بله';
-}
-
-function line(style: SummaryOptions['style'], icon: string, title: string, value: string): string {
-  return style === 'markdown' ? `- ${icon} **${title}:** ${value}` : `${icon} ${title}: ${value}`;
-}
-
-/** جمع‌بندی وضعیت تسک‌های یک روز */
-function taskLine(day: number, tasks: Task[]): string {
-  const list = tasks.filter((t) => !t.backlog && t.due === day);
-  if (list.length === 0) return `${NOT_RECORDED} — تسکی برای این روز زمان‌بندی نشده بود`;
-  const done = list.filter((t) => t.status === 'done').length;
-  const pct = Math.round((done / list.length) * 100);
-  const doneTitles = list.filter((t) => t.status === 'done').map((t) => t.title);
-  const openTitles = list.filter((t) => t.status !== 'done').map((t) => t.title);
-  const parts = [`${toFa(done)} از ${toFa(list.length)} انجام شد (${toFa(pct)}٪)`];
-  if (doneTitles.length) parts.push(`انجام‌شده: ${doneTitles.join(' / ')}`);
-  if (openTitles.length) parts.push(`باقی‌مانده: ${openTitles.join(' / ')}`);
-  return parts.join(' • ');
-}
-
-function habitLine(day: number, habits: Habit[], logs: Record<string, boolean>): string {
-  const active = habits.filter((h) => !h.archived);
-  if (active.length === 0) return `${NOT_RECORDED} — عادت فعالی تعریف نشده است`;
-  const done = active.filter((h) => logs[`${h.id}:${day}`]);
-  const rest = active.filter((h) => !logs[`${h.id}:${day}`]);
-  const parts = [`${toFa(done.length)} از ${toFa(active.length)} انجام شد`];
-  if (done.length) parts.push(`انجام‌شده: ${done.map((h) => h.title).join(' / ')}`);
-  if (rest.length) parts.push(`انجام‌نشده: ${rest.map((h) => h.title).join(' / ')}`);
-  return parts.join(' • ');
-}
-
-function sleepLine(r: DayReflection | undefined): string {
-  const wake = r?.wake?.trim();
-  const sleep = r?.sleep?.trim();
-  if (!wake && !sleep) return `${NOT_RECORDED} — ساعت خواب و بیداری وارد نشده است`;
-  const dur = sleepDurationMin(wake, sleep);
-  const parts: string[] = [];
-  parts.push(wake ? `بیداری ${clockToFa(wake)}` : `بیداری ${NOT_RECORDED}`);
-  parts.push(sleep ? `خواب ${clockToFa(sleep)}` : `خواب ${NOT_RECORDED}`);
-  if (dur != null) parts.push(`مدت خواب ${formatDurationFa(dur)}`);
-  return parts.join(' • ');
-}
-
-export interface DaySummaryExtras {
-  /** خلاصه یک روز کامل (متن چندخطی) */
-  day: number;
-  withScore: boolean;
-}
-
-/** خلاصه متنی یک روز — همه بخش‌ها صریح، شامل موارد خالی */
-export function buildDaySummary(
-  day: number,
-  ctx: SummaryContext,
-  opts: SummaryOptions,
-  /** نگاشت آماده روز→بازتاب؛ برای خروجی چندروزه یک بار ساخته می‌شود */
-  presetMap?: Map<number, DayReflection>,
-): string {
-  const r = (presetMap ?? reflectionMap(ctx.reflections)).get(day);
-  const style = opts.style;
-  const useMarkdown = style === 'markdown';
+/** بلوک متنی یک روز — همه فیلدها شفاف و کامل */
+export function buildDayBlock(d: DayStat, opts: SummaryOptions, index?: number): string {
   const lines: string[] = [];
-
-  if (opts.header) {
-    const dateTitle = `${weekdayName(day)} ${formatJalali(day)}`;
-    lines.push(useMarkdown ? `### 📅 ${dateTitle}` : `📅 ${dateTitle}`);
-    lines.push(useMarkdown ? `*کد روز: ${formatJalaliShort(day)}*` : `   کد روز: ${formatJalaliShort(day)}`);
-  }
+  const title = formatJalaliFull(d.day);
+  const head = index != null ? `${toFa(index)}) ${title}` : title;
+  lines.push(`${head}  🗓️`);
+  lines.push(`   ${formatJalaliShort(d.day)} • ${formatGregorianIso(d.day)}`);
 
   if (opts.includeScore) {
-    lines.push(line(style, '⭐', 'نمره روز', r?.score != null ? `${formatScore(r.score)} از ۱۰` : NOT_RECORDED));
-  }
-
-  if (opts.mood) {
     lines.push(
-      line(
-        style,
-        '😊',
-        'حال روز',
-        r?.mood != null ? `${moodFace(r.mood)} ${moodLabel(r.mood)}` : NOT_RECORDED,
-      ),
+      d.score != null
+        ? `⭐ نمره روز: ${formatScore(d.score)} از ۱۰ (${scoreGrade(d.score)})`
+        : `⭐ نمره روز: ${EMPTY}`,
     );
   }
 
-  if (opts.progress) {
-    lines.push(line(style, '✅', 'تسک‌ها', taskLine(day, ctx.tasks)));
-    lines.push(line(style, '🔥', 'عادت‌ها', habitLine(day, ctx.habits, ctx.habitLogs)));
+  if (opts.includeMood) {
+    lines.push(`🙂 حال روز: ${moodLabel(d.mood)}`);
   }
 
-  if (opts.basics) {
-    lines.push(line(style, '😴', 'خواب', sleepLine(r)));
-    lines.push(line(style, '🏃', 'ورزش', boolText(r?.sport, r?.sportType)));
-    lines.push(
-      line(
-        style,
-        '🚶',
-        'بیرون رفتن',
-        r?.wentOut === true ? boolText(true, r?.outPlace) : r?.wentOut === false ? 'خیر — بیرون نرفتم' : NOT_RECORDED,
-      ),
-    );
+  if (opts.includeNote) {
+    const note = orEmpty(d.dayNote);
+    if (note !== EMPTY || opts.showEmpty) lines.push(`📝 توضیحات روز: ${note}`);
   }
 
-  if (opts.dayNote) lines.push(line(style, '📝', 'یادداشت روز', emptyText(r?.dayNote)));
-  if (opts.wins) lines.push(line(style, '🏆', 'دستاوردها', emptyText(r?.wins)));
-  if (opts.improve) lines.push(line(style, '🔧', 'قابل بهبود', emptyText(r?.improve)));
-  if (opts.lessons) lines.push(line(style, '💡', 'درس آموخته‌شده', emptyText(r?.lessons)));
-  if (opts.gratitude) lines.push(line(style, '🙏', 'قدردانی', emptyText(r?.gratitude)));
-
-  if (!r) {
-    lines.push(line(style, 'ℹ️', 'وضعیت بازتاب', 'برای این روز هیچ بازتابی ثبت نشده است'));
+  if (opts.includeReflection) {
+    const push = (label: string, value?: string) => {
+      const v = orEmpty(value);
+      if (v !== EMPTY || opts.showEmpty) lines.push(`${label}: ${v}`);
+    };
+    push('🏆 دستاوردها', d.wins);
+    push('🔧 قابل بهبود', d.improve);
+    push('💡 درس آموخته', d.lessons);
+    push('🙏 قدردانی', d.gratitude);
   }
 
+  if (opts.includeBasics) {
+    const wake = d.wake ? formatClock24(d.wake) : '';
+    const sleep = d.sleep ? formatClock24(d.sleep) : '';
+    if (wake || sleep || opts.showEmpty) {
+      lines.push(
+        `😴 خواب: ${wake ? `بیداری ${wake}` : `بیداری ${EMPTY}`}` +
+          ` • ${sleep ? `خواب ${sleep}` : `خواب ${EMPTY}`}` +
+          (d.sleepMin != null ? ` • مدت ${formatDurationFa(d.sleepMin)}` : ''),
+      );
+    }
+    if (d.sport || opts.showEmpty) {
+      lines.push(`🏃 ورزش: ${d.sport ? `بله${d.sportType ? ` (${d.sportType})` : ''}` : EMPTY}`);
+    }
+    if (d.wentOut || opts.showEmpty) {
+      lines.push(`🚶 بیرون رفتن: ${d.wentOut ? `بله${d.outPlace ? ` (${d.outPlace})` : ''}` : EMPTY}`);
+    }
+  }
+
+  if (opts.includeHabits && (d.habitsTotal > 0 || opts.showEmpty)) {
+    if (d.habitsTotal === 0) {
+      lines.push(`🔥 عادت‌ها: ${EMPTY} (عادت فعالی تعریف نشده است)`);
+    } else {
+      lines.push(`🔥 عادت‌ها: ${num(d.habitsDone)} از ${num(d.habitsTotal)} انجام شد`);
+      if (d.habitsDoneTitles.length) lines.push(`   ✓ انجام‌شده: ${d.habitsDoneTitles.join('، ')}`);
+      if (d.habitsMissedTitles.length) lines.push(`   ✗ انجام‌نشده: ${d.habitsMissedTitles.join('، ')}`);
+    }
+  }
+
+  if (opts.includeTasks && (d.tasksTotal > 0 || opts.showEmpty)) {
+    if (d.tasksTotal === 0) {
+      lines.push(`✅ تسک‌ها: ${EMPTY} (برای این روز تسکی زمان‌بندی نشده بود)`);
+    } else {
+      lines.push(`✅ تسک‌ها: ${num(d.tasksDone)} از ${num(d.tasksTotal)} انجام شد (${num(d.tasksPct)}٪)`);
+      for (const t of d.tasks) {
+        const st = t.status === 'done' ? 'انجام‌شده' : t.status === 'doing' ? 'در حال انجام' : 'انجام‌نشده';
+        const time = t.time ? ` — ساعت ${formatClock24(t.time)}` : '';
+        lines.push(`   • [${st}] ${t.title}${time}`);
+      }
+    }
+  }
+
+  if (opts.includeEvents && (d.events.length > 0 || opts.showEmpty)) {
+    if (d.events.length === 0) {
+      lines.push(`📅 رویدادها: ${EMPTY}`);
+    } else {
+      lines.push(`📅 رویدادها: ${num(d.events.length)} مورد`);
+      for (const e of d.events) {
+        lines.push(`   • ${e.title}${e.time ? ` — ساعت ${formatClock24(e.time)}` : ' — بدون ساعت'}`);
+      }
+    }
+  }
+
+  // اگر هیچ چیزی برای گفتن نبود، صریح بگو
+  if (lines.length <= 2) {
+    lines.push(`⛔ در این روز هیچ داده‌ای ثبت نشده است.`);
+  }
   return lines.join('\n');
 }
 
-export interface MultiSummaryOptions extends SummaryOptions {
-  /** سرصفحه کلی (تعداد روزها + آمار کلی) */
-  groupHeader?: boolean;
-  /** چیدمان روزها */
-  sort?: 'asc' | 'desc' | 'scoreDesc' | 'scoreAsc';
-  title?: string;
-}
-
-function sortDays(days: number[], refs: Map<number, DayReflection>, sort: MultiSummaryOptions['sort']): number[] {
-  const arr = [...days];
-  switch (sort) {
-    case 'desc':
-      return arr.sort((a, b) => b - a);
-    case 'scoreDesc':
-      return arr.sort((a, b) => (refs.get(b)?.score ?? -1) - (refs.get(a)?.score ?? -1) || b - a);
-    case 'scoreAsc':
-      return arr.sort((a, b) => (refs.get(a)?.score ?? 11) - (refs.get(b)?.score ?? 11) || b - a);
-    case 'asc':
-    default:
-      return arr.sort((a, b) => a - b);
-  }
-}
-
-/** خلاصه متنی چند روز انتخاب‌شده (خروجی آمادهٔ کپی) */
-export function buildMultiDaySummary(
-  days: number[],
-  ctx: SummaryContext,
-  opts: MultiSummaryOptions,
-): string {
-  const refs = reflectionMap(ctx.reflections);
-  const ordered = sortDays(days, refs, opts.sort ?? 'asc');
-  const blocks = ordered.map((d) => buildDaySummary(d, ctx, opts, refs));
-  const sep = opts.style === 'markdown' ? '\n\n---\n\n' : '\n\n────────────────────────\n\n';
-
-  if (opts.groupHeader === false) return blocks.join(sep);
-
-  const scored = ordered.map((d) => refs.get(d)?.score).filter((s): s is number => s != null);
-  const avgScore = scored.length ? Math.round((scored.reduce((a, b) => a + b, 0) / scored.length) * 10) / 10 : null;
-  const title = opts.title ?? `خلاصه ${toFa(ordered.length)} روز`;
-  const head: string[] = [];
-  head.push(opts.style === 'markdown' ? `## ${title}` : `━━━━ ${title} ━━━━`);
-  head.push(
-    `بازه: ${formatJalali(ordered[0])} تا ${formatJalali(ordered[ordered.length - 1])}` +
-      ` • روزهای انتخاب‌شده: ${toFa(ordered.length)}` +
-      (opts.includeScore
-        ? ` • روزهای با نمره: ${toFa(scored.length)}` +
-          (avgScore != null ? ` • میانگین نمره: ${formatScore(avgScore)} از ۱۰` : ` • میانگین نمره: ${NOT_RECORDED}`)
-        : ' • نمره‌ها در این خروجی حذف شده‌اند'),
-  );
-  return `${head.join('\n')}\n\n${sep.trimStart()}\n${blocks.join(sep)}`;
-}
-
-/** آمار خلاصه یک مجموعه روز (برای نمایش در کارت‌های آماری) */
-export function scoreSummary(numbers: number[]): {
+export interface SummaryMeta {
+  label: string;
+  from: number;
+  to: number;
   count: number;
-  avg: number | null;
-  median: number | null;
-  min: number | null;
-  max: number | null;
-} {
-  const s = numbers.filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
-  if (!s.length) return { count: 0, avg: null, median: null, min: null, max: null };
-  const mid = Math.floor(s.length / 2);
-  return {
-    count: s.length,
-    avg: Math.round((s.reduce((a, b) => a + b, 0) / s.length) * 10) / 10,
-    median: s.length % 2 ? s[mid] : Math.round(((s[mid - 1] + s[mid]) / 2) * 10) / 10,
-    min: s[0],
-    max: s[s.length - 1],
-  };
 }
 
-/** ورودی‌های خالی/ثبت‌نشده یک بازتاب را می‌شمارد (برای نمایش کیفیت ثبت داده) */
-export function missingFields(r: DayReflection | undefined): string[] {
-  if (!r) return ['همه بخش‌ها'];
-  const out: string[] = [];
-  if (r.score == null) out.push('نمره');
-  if (!r.wake) out.push('ساعت بیداری');
-  if (!r.sleep) out.push('ساعت خواب');
-  if (!r.sport) out.push('ورزش');
-  if (!r.wentOut) out.push('بیرون رفتن');
-  if (!(r.dayNote ?? '').trim()) out.push('یادداشت روز');
-  if (!(r.wins ?? '').trim()) out.push('دستاوردها');
-  if (!(r.improve ?? '').trim()) out.push('قابل بهبود');
-  if (!(r.lessons ?? '').trim()) out.push('درس آموخته‌شده');
-  if (!(r.gratitude ?? '').trim()) out.push('قدردانی');
-  return out;
+/** متن کامل خروجی برای مجموعه‌ای از روزها */
+export function buildSummaryText(list: DayStat[], opts: SummaryOptions, meta: SummaryMeta): string {
+  const parts: string[] = [];
+  if (opts.includeHeader) {
+    const range = meta.from === meta.to
+      ? formatJalali(meta.from, { weekday: true })
+      : `${formatJalali(meta.from)} تا ${formatJalali(meta.to)}`;
+    const scored = list.filter((d) => d.score != null).length;
+    parts.push(`📋 خلاصه روزها — ${toFa(meta.count)} روز انتخاب‌شده`);
+    parts.push(`🗂️ بازه: ${range} (${meta.label})`);
+    if (opts.includeScore) parts.push(`⭐ ${toFa(scored)} روز دارای نمره • ${toFa(meta.count - scored)} روز بدون نمره`);
+    parts.push(LINE);
+  }
+
+  if (opts.includeStats && list.length > 0) {
+    const s = scoreStats(list);
+    const r = rollupDays(list);
+    const stats: string[] = [];
+    if (opts.includeScore) {
+      stats.push(
+        s.avg != null
+          ? `⭐ میانگین نمره: ${formatScore(s.avg)} از ۱۰ (${toFa(s.count)} روز)`
+          : '⭐ میانگین نمره: ثبت نشده',
+      );
+      if (s.max != null && s.best) stats.push(`🥇 بالاترین نمره: ${formatScore(s.max)} (${formatJalali(s.best.day)})`);
+      if (s.min != null && s.worst) stats.push(`🥉 پایین‌ترین نمره: ${formatScore(s.min)} (${formatJalali(s.worst.day)})`);
+      if (s.std != null) stats.push(`📊 نوسان (انحراف معیار): ${formatScore(s.std)}`);
+    }
+    if (opts.includeMood && r.avgMood != null) stats.push(`🙂 میانگین حال روز: ${formatScore(r.avgMood)} از ۵`);
+    if (opts.includeTasks && r.avgTasksPct != null) {
+      stats.push(`✅ میانگین انجام تسک‌ها: ${toFa(r.avgTasksPct)}٪ (${toFa(r.doneTasks)} از ${toFa(r.totalTasks)})`);
+    }
+    if (opts.includeBasics) {
+      if (r.avgSleepMin != null) stats.push(`😴 میانگین خواب: ${formatDurationFa(r.avgSleepMin)}`);
+      stats.push(`🏃 روزهای ورزش: ${toFa(r.sportDays)} روز • 🚶 روزهای بیرون: ${toFa(r.outDays)} روز`);
+    }
+    if (opts.includeHabits && r.habitPossible > 0) {
+      stats.push(`🔥 عادت‌ها: ${toFa(r.habitChecks)} از ${toFa(r.habitPossible)} تیک (${toFa(Math.round((r.habitChecks / r.habitPossible) * 100))}٪)`);
+    }
+    stats.push(`📝 روزهای دارای بازتاب: ${toFa(r.reflectionDays)} از ${toFa(list.length)}`);
+    parts.push(...stats);
+    parts.push(LINE);
+    parts.push('');
+  }
+
+  parts.push(list.map((d, i) => buildDayBlock(d, opts, i + 1)).join(`\n\n${LINE}\n\n`));
+  parts.push('');
+  parts.push(LINE);
+  parts.push(`ساخته‌شده با «میزکار زندگی» — ${formatJalaliFull(Date.now())} ساعت ${toFa(`${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`)}`);
+  return parts.join('\n');
 }
 
-/** تعداد روزهای دارای بازتاب در بازه */
-export function countReflectionsInRange(reflections: DayReflection[], start: number, end: number): number {
-  return reflections.filter((r) => inRange(r.day, start, end)).length;
+/** خروجی CSV از روزهای انتخاب‌شده */
+export function buildSummaryCsv(list: DayStat[], opts: SummaryOptions): string {
+  const rows = list.map((d) => {
+    const row: Record<string, string | number> = {
+      تاریخ_شمسی: formatJalaliShort(d.day),
+      تاریخ_میلادی: formatGregorianIso(d.day),
+      روز_هفته: formatJalaliFull(d.day).split(' ')[0],
+    };
+    if (opts.includeScore) {
+      row['نمره_از_۱۰'] = d.score != null ? d.score : '';
+      row['توصیف_نمره'] = scoreGrade(d.score);
+    }
+    if (opts.includeMood) row['حال_روز'] = d.mood != null ? d.mood : '';
+    if (opts.includeNote) row['توضیحات_روز'] = orEmpty(d.dayNote, '');
+    if (opts.includeReflection) {
+      row['دستاوردها'] = orEmpty(d.wins, '');
+      row['قابل_بهبود'] = orEmpty(d.improve, '');
+      row['درس_آموخته'] = orEmpty(d.lessons, '');
+      row['قدردانی'] = orEmpty(d.gratitude, '');
+    }
+    if (opts.includeBasics) {
+      row['بیداری'] = d.wake ?? '';
+      row['خواب'] = d.sleep ?? '';
+      row['مدت_خواب_ساعت'] = d.sleepMin != null ? Math.round((d.sleepMin / 60) * 10) / 10 : '';
+      row['ورزش'] = d.sport ? 'بله' : 'خیر';
+      row['نوع_ورزش'] = orEmpty(d.sportType, '');
+      row['بیرون_رفتن'] = d.wentOut ? 'بله' : 'خیر';
+      row['محل_بیرون'] = orEmpty(d.outPlace, '');
+    }
+    if (opts.includeHabits) {
+      row['عادت_انجام‌شده'] = d.habitsDone;
+      row['عادت_کل'] = d.habitsTotal;
+    }
+    if (opts.includeTasks) {
+      row['تسک_انجام‌شده'] = d.tasksDone;
+      row['تسک_کل'] = d.tasksTotal;
+      row['درصد_تسک'] = d.tasksPct < 0 ? '' : d.tasksPct;
+    }
+    if (opts.includeEvents) row['تعداد_رویداد'] = d.events.length;
+    return row;
+  });
+  return exportRowsCsv(rows);
 }
-
-/** ساعت شروع تسک‌های یک روز به شکل مرتب‌شده (برای خروجی متنی) */
-export function sortedTaskTimes(day: number, tasks: Task[]): string[] {
-  return tasks
-    .filter((t) => !t.backlog && t.due === day && t.time)
-    .map((t) => clockToFa(t.time!))
-    .filter((t) => parseClock(t) != null)
-    .sort();
-}
-
-export { habitsDoneOn };

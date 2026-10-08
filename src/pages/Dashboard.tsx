@@ -1,22 +1,22 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  ListTodo, CalendarDays, Flame, Plus, ArrowLeft, CheckCircle2, Clock, Sparkles,
-  ChevronLeft, Activity, Star, StickyNote, MoonStar, LineChart,
+  Activity, ArrowLeft, CalendarDays, CheckCircle2, ChevronLeft, Flame, Gauge,
+  ListTodo, Plus, Sparkles, Star, StickyNote, MoonStar, Target,
 } from 'lucide-react';
 import { useApp } from '../lib/store';
 import {
-  toJalaali, J_MONTHS, toFa, greetingByHour, formatJalali, todayStart, addDays,
-  weekdayName, smartDate, diffDays, formatScore, clockToFa,
+  addDays, formatJalali, formatScore, greetingByHour, J_MONTHS, toFa, toJalaali,
+  todayStart, weekdayName, smartDate, diffDays, parseClock,
 } from '../lib/jalali';
-import { habitStreak, reflectionMap } from '../lib/stats';
-import { useNow } from '../lib/hooks';
-import { moodFace, type DayReflection } from '../lib/types';
-import { Card, CardHead, Btn, Badge, Empty } from '../components/ui';
-import { Bars } from '../components/charts';
-import type { QuickKind } from '../components/Shell';
+import { habitStreak } from '../lib/stats';
+import { buildDayStats } from '../lib/days';
+import { moodFace } from '../lib/display';
+import { Card, CardHead, Btn, Badge, Empty, Segmented, CheckIcon } from '../components/ui';
+import { Bars, Donut, Legend, ScoreTrend } from '../components/charts';
 import { cx } from '../lib/utils';
+import type { QuickKind } from '../components/Shell';
 
 const fadeUp = {
   initial: { opacity: 0, y: 18 },
@@ -25,16 +25,18 @@ const fadeUp = {
 
 export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: QuickKind) => void }) {
   const { state } = useApp();
-  const nowTs = useNow();
-  const now = new Date(nowTs);
+  const now = new Date();
   const j = toJalaali(now);
-  const today = todayStart();
+  // امروز فقط یک‌بار محاسبه می‌شود تا مبناهای «امروز/گذشته» در طول رندر ثابت بمانند
+  const today = useMemo(() => todayStart(), []);
+  const [trendKind, setTrendKind] = useState<'tasks' | 'score'>('tasks');
 
   const openTasks = useMemo(() => state.tasks.filter((t) => t.status !== 'done' && !t.backlog), [state.tasks]);
-  const overdue = useMemo(() => openTasks.filter((t) => t.due != null && diffDays(t.due, nowTs) < 0), [openTasks, nowTs]);
-  const dueToday = useMemo(() => openTasks.filter((t) => t.due != null && diffDays(t.due, nowTs) === 0), [openTasks, nowTs]);
+  const overdue = openTasks.filter((t) => t.due != null && diffDays(t.due, today) < 0);
+  const dueToday = openTasks.filter((t) => t.due != null && diffDays(t.due, today) === 0);
+
   const todayEvents = useMemo(
-    () => state.events.filter((e) => e.day === today).sort((a, b) => (a.time || '99').localeCompare(b.time || '99')),
+    () => state.events.filter((e) => e.day === today).sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99')),
     [state.events, today],
   );
 
@@ -52,22 +54,22 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: QuickKind) =
   const todayDone = todayTasksAll.filter((t) => t.status === 'done').length;
   const todayPct = todayTasksAll.length ? Math.round((todayDone / todayTasksAll.length) * 100) : 0;
 
-  // ── نمره‌ها و حال روزهای اخیر ──
-  const refMap = useMemo(() => reflectionMap(state.reflections), [state.reflections]);
-  const last7 = useMemo(() => {
-    const out: Array<{ day: number; ref?: DayReflection }> = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = addDays(today, -i);
-      out.push({ day: d, ref: refMap.get(d) });
-    }
-    return out;
-  }, [refMap, today]);
-  const scored7 = last7.map((x) => x.ref?.score).filter((s): s is number => s != null);
-  const avgScore7 = scored7.length ? Math.round((scored7.reduce((a, b) => a + b, 0) / scored7.length) * 10) / 10 : null;
-  const sportDays7 = last7.filter((x) => x.ref?.sport).length;
-  const todayRef = refMap.get(today);
+  // آمار ۱۴ روز اخیر (بهره‌وری + نمره)
+  const last14 = useMemo(() => {
+    const days: number[] = [];
+    for (let i = 13; i >= 0; i--) days.push(addDays(today, -i));
+    return buildDayStats(state, days);
+  }, [state, today]);
+
+  const scored14 = last14.filter((d) => d.score != null);
+  const avgScore14 = scored14.length
+    ? Math.round((scored14.reduce((a, d) => a + (d.score ?? 0), 0) / scored14.length) * 10) / 10
+    : null;
+  const sport7 = last14.slice(-7).filter((d) => d.sport).length;
+  const todayScore = last14[last14.length - 1]?.score ?? null;
 
   const name = state.profile.name?.trim();
+  const bestStreak = habitToday.length ? Math.max(...habitToday.map((x) => x.streak), 0) : 0;
 
   return (
     <div className="space-y-5">
@@ -99,14 +101,17 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: QuickKind) =
               <button onClick={() => onQuickAdd('event')} className="flex h-10 items-center gap-1.5 rounded-xl bg-white/15 px-4 text-[13px] font-black text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25 active:scale-95">
                 <Plus size={16} strokeWidth={3} /> رویداد
               </button>
-              <Link to="/today" className="flex h-10 items-center gap-1.5 rounded-xl bg-white/15 px-4 text-[13px] font-black text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25 active:scale-95">
-                <MoonStar size={16} strokeWidth={2.6} /> ثبت بازتاب امروز
+              <button onClick={() => onQuickAdd('note')} className="flex h-10 items-center gap-1.5 rounded-xl bg-white/15 px-4 text-[13px] font-black text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25 active:scale-95">
+                <Plus size={16} strokeWidth={3} /> یادداشت
+              </button>
+              <Link to="/insights" className="flex h-10 items-center gap-1.5 rounded-xl bg-white/15 px-4 text-[13px] font-black text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25 active:scale-95">
+                <Gauge size={16} /> تحلیل روزها
               </Link>
             </div>
           </div>
           <div className="hidden shrink-0 items-center gap-3 md:flex">
             <MiniStat label="پیشرفت امروز" value={todayTasksAll.length ? `${toFa(todayPct)}٪` : 'بدون تسک'} />
-            <MiniStat label="نمره امروز" value={todayRef?.score != null ? `${formatScore(todayRef.score)} از ۱۰` : 'ثبت نشده'} />
+            <MiniStat label="نمره امروز" value={todayScore != null ? `${formatScore(todayScore)} از ۱۰` : 'ثبت نشده'} />
             <MiniStat label="رویداد امروز" value={`${toFa(todayEvents.length)} رویداد`} />
           </div>
         </div>
@@ -115,26 +120,51 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: QuickKind) =
       {/* کارت‌های خلاصه */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard delay={0.05} icon={<ListTodo size={20} />} tone="sky" label="بهره‌وری امروز" value={todayTasksAll.length ? `${toFa(todayPct)}٪` : 'بدون تسک'} sub={todayTasksAll.length ? `${toFa(todayDone)} از ${toFa(todayTasksAll.length)} انجام شد` : 'روز سبکی داری ✨'} alert={overdue.length > 0} />
-        <StatCard delay={0.1} icon={<Flame size={20} />} tone="amber" label="بهترین استریک عادت" value={habitToday.length ? `${toFa(Math.max(...habitToday.map((x) => x.streak), 0))} روز` : '—'} sub={`${toFa(habitToday.filter((x) => x.done).length)} از ${toFa(habitToday.length)} امروز انجام شد`} />
-        <StatCard delay={0.15} icon={<Star size={20} />} tone="violet" label="میانگین نمره ۷ روز" value={avgScore7 != null ? `${formatScore(avgScore7)} از ۱۰` : 'ثبت نشده'} sub={scored7.length ? `${toFa(scored7.length)} روز نمره‌دار — برای جزئیات به «نمره‌ها» برو` : 'در صفحه «روز جاری» نمره بده'} />
-        <StatCard delay={0.2} icon={<Activity size={20} />} tone="green" label="ورزش ۷ روز اخیر" value={`${toFa(sportDays7)} روز`} sub={sportDays7 > 0 ? 'آفرین، ادامه بده! 💪' : 'هنوز ورزشی ثبت نشده'} />
+        <StatCard delay={0.1} icon={<Flame size={20} />} tone="amber" label="بهترین استریک عادت" value={bestStreak > 0 ? `${toFa(bestStreak)} روز` : '—'} sub={`${toFa(habitToday.filter((x) => x.done).length)} از ${toFa(habitToday.length)} امروز انجام شد`} />
+        <StatCard delay={0.15} icon={<Star size={20} />} tone="violet" label="میانگین نمره ۱۴ روز" value={avgScore14 != null ? `${formatScore(avgScore14)} از ۱۰` : 'ثبت نشده'} sub={scored14.length ? `${toFa(scored14.length)} روز ثبت‌شده` : 'از صفحه «روز جاری» نمره بده'} />
+        <StatCard delay={0.2} icon={<Activity size={20} />} tone="green" label="ورزش ۷ روز اخیر" value={`${toFa(sport7)} روز`} sub={sport7 > 0 ? 'آفرین، ادامه بده! 💪' : 'هنوز ورزشی ثبت نشده'} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
-        {/* روند نمره + یادداشت‌های سنجاق‌شده */}
+        {/* روند ۱۴ روز */}
         <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.1 }} className="xl:col-span-2">
           <Card>
             <CardHead
-              title="روند نمره روزها — ۱۴ روز اخیر"
-              sub="نمره‌های ثبت‌شده در بازتاب پایان روز (با یک رقم اعشار)"
+              title="روند ۱۴ روز اخیر"
+              sub={trendKind === 'tasks' ? 'درصد انجام تسک‌های هر روز' : 'نمره ثبت‌شده هر روز (۰ تا ۱۰)'}
               action={
-                <Link to="/insights" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">
-                  تحلیل کامل <ChevronLeft size={14} />
-                </Link>
+                <Segmented
+                  value={trendKind}
+                  onChange={setTrendKind}
+                  options={[
+                    { v: 'tasks', label: 'بهره‌وری', icon: <Target size={13} /> },
+                    { v: 'score', label: 'نمره روز', icon: <Star size={13} /> },
+                  ]}
+                />
               }
             />
-            <div className="px-5 pb-3">
-              <ScoreTrend />
+            <div className="px-5 pb-4">
+              {trendKind === 'tasks' ? (
+                <Bars
+                  data={last14.map((d) => ({
+                    label: toFa(toJalaali(new Date(d.day)).jd),
+                    value: Math.max(d.tasksPct, 0),
+                    color: d.tasksPct < 0 ? '#cbd5e1' : d.tasksPct >= 80 ? '#10b981' : d.tasksPct >= 50 ? '#f59e0b' : '#f43f5e',
+                    dim: d.tasksPct < 0,
+                    hint: `${formatJalali(d.day)} — ${d.tasksPct < 0 ? 'تسکی نبود' : `${toFa(d.tasksPct)}٪ انجام`}`,
+                  }))}
+                  formatTick={(v) => (v > 0 ? `${toFa(v)}٪` : '')}
+                />
+              ) : (
+                <ScoreTrend
+                  points={last14.map((d) => ({
+                    label: toFa(toJalaali(new Date(d.day)).jd),
+                    value: d.score,
+                    hint: `${formatJalali(d.day)} — نمره: ${d.score != null ? formatScore(d.score) : 'ثبت نشده'}`,
+                  }))}
+                  height={190}
+                />
+              )}
             </div>
             <div className="border-t border-slate-100 px-5 py-4 dark:border-white/5">
               <div className="mb-3 flex items-center justify-between">
@@ -159,50 +189,13 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: QuickKind) =
           </motion.div>
           <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.18 }}>
             <Card>
-              <CardHead title="حال و نمره ۷ روز اخیر" sub="از بازتاب‌های روزانه" />
+              <CardHead
+                title="حال ۷ روز اخیر"
+                sub="از بازتاب‌های روزانه"
+                action={<Link to="/insights" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">تحلیل <ChevronLeft size={14} /></Link>}
+              />
               <div className="px-5 pb-5">
                 <WeekMood />
-              </div>
-            </Card>
-          </motion.div>
-
-          {/* برنامه امروز */}
-          <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.2 }}>
-            <Card>
-              <CardHead
-                title="برنامه امروز"
-                sub={formatJalali(today, { weekday: true })}
-                action={<Link to="/calendar" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">تقویم <ChevronLeft size={14} /></Link>}
-              />
-              <div className="space-y-2 px-5 pb-5">
-                {todayEvents.length === 0 && dueToday.length === 0 && (
-                  <p className="rounded-2xl bg-slate-50 py-5 text-center text-xs text-slate-400 dark:bg-white/5">امروز برنامه‌ای نداری — از روزت لذت ببر ✨</p>
-                )}
-                {todayEvents.map((e) => (
-                  <div key={e.id} className="flex items-center gap-2.5 rounded-2xl border border-slate-100 px-3 py-2.5 dark:border-white/5">
-                    <span className="h-9 w-1.5 shrink-0 rounded-full" style={{ background: e.color }} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{e.title}</p>
-                      <p className="flex items-center gap-1 text-[11px] text-slate-400">
-                        <Clock size={11} />
-                        {e.time ? `ساعت ${clockToFa(e.time)}` : 'بدون ساعت'}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {dueToday.map((t) => (
-                  <div key={t.id} className="flex items-center gap-2.5 rounded-2xl bg-amber-500/5 px-3 py-2.5 ring-1 ring-amber-500/20">
-                    <CheckCircle2 size={17} className="shrink-0 text-amber-500" />
-                    <p className="flex-1 truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{t.title}</p>
-                    <Badge tone="amber">سررسید امروز</Badge>
-                  </div>
-                ))}
-                {overdue.length > 0 && (
-                  <Link to="/tasks" className="flex items-center justify-between rounded-2xl bg-rose-500/5 px-3 py-2.5 text-xs font-bold text-rose-600 ring-1 ring-rose-500/20 dark:text-rose-300">
-                    {toFa(overdue.length)} وظیفه عقب‌افتاده داری
-                    <ArrowLeft size={14} />
-                  </Link>
-                )}
               </div>
             </Card>
           </motion.div>
@@ -212,24 +205,63 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: QuickKind) =
       <div className="grid gap-5 xl:grid-cols-3">
         <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.1 }}>
           <Card>
+            <CardHead title="برنامه امروز" sub={formatJalali(today, { weekday: true })} action={<Link to="/today" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">روز جاری <ChevronLeft size={14} /></Link>} />
+            <div className="space-y-2 px-5 pb-5">
+              {todayEvents.length === 0 && dueToday.length === 0 && (
+                <p className="rounded-2xl bg-slate-50 py-5 text-center text-xs text-slate-400 dark:bg-white/5">امروز برنامه‌ای نداری — از روزت لذت ببر ✨</p>
+              )}
+              {todayEvents.map((e) => (
+                <div key={e.id} className="flex items-center gap-2.5 rounded-2xl border border-slate-100 px-3 py-2.5 dark:border-white/5">
+                  <span className="h-9 w-1.5 shrink-0 rounded-full" style={{ background: e.color }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{e.title}</p>
+                    <p className="text-[11px] text-slate-400">{e.time ? `ساعت ${toFa(e.time)}` : 'بدون ساعت'}</p>
+                  </div>
+                </div>
+              ))}
+              {dueToday.map((t) => (
+                <div key={t.id} className="flex items-center gap-2.5 rounded-2xl bg-amber-500/5 px-3 py-2.5 ring-1 ring-amber-500/20">
+                  <CheckCircle2 size={17} className="shrink-0 text-amber-500" />
+                  <p className="flex-1 truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{t.title}</p>
+                  <Badge tone="amber">سررسید امروز</Badge>
+                </div>
+              ))}
+              {overdue.length > 0 && (
+                <Link to="/tasks" className="flex items-center justify-between rounded-2xl bg-rose-500/5 px-3 py-2.5 text-xs font-bold text-rose-600 ring-1 ring-rose-500/20 dark:text-rose-300">
+                  {toFa(overdue.length)} وظیفه عقب‌افتاده داری
+                  <ArrowLeft size={14} />
+                </Link>
+              )}
+            </div>
+          </Card>
+        </motion.div>
+
+        <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.15 }}>
+          <Card>
             <CardHead title="عادت‌های امروز" sub="با یک کلیک ثبت کن" action={<Link to="/habits" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">همه <ChevronLeft size={14} /></Link>} />
             <TodayHabits />
           </Card>
         </motion.div>
-        <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.15 }} className="xl:col-span-2">
+
+        <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.2 }}>
+          <Card>
+            <CardHead title="بازتاب‌های اخیر" sub="حال و نمره روزهای گذشته" action={<Link to="/today" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">امروز <ChevronLeft size={14} /></Link>} />
+            <RecentReflections />
+          </Card>
+        </motion.div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.1 }}>
           <Card>
             <CardHead title="نزدیک‌ترین سررسیدها" sub="وظایف باز به ترتیب فوریت" action={<Link to="/tasks" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">مدیریت وظایف <ChevronLeft size={14} /></Link>} />
             <UpcomingTasks />
           </Card>
         </motion.div>
-        <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.2 }} className="xl:col-span-3">
+        <motion.div {...fadeUp} transition={{ duration: 0.45, delay: 0.15 }}>
           <Card>
-            <CardHead
-              title="بازتاب‌های اخیر"
-              sub="حال و نمره روزهای گذشته — با یک کلیک به تحلیل و کپی خلاصه‌ها بروید"
-              action={<Link to="/insights" className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400"><LineChart size={13} /> نمره‌ها و خلاصه‌ها</Link>}
-            />
-            <RecentReflections />
+            <CardHead title="برنامه فردا" sub={formatJalali(addDays(today, 1), { weekday: true })} action={<Link to={`/today?day=${addDays(today, 1)}`} className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">برنامه‌ریزی <ChevronLeft size={14} /></Link>} />
+            <TomorrowList />
           </Card>
         </motion.div>
       </div>
@@ -239,18 +271,19 @@ export default function Dashboard({ onQuickAdd }: { onQuickAdd: (k: QuickKind) =
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-[124px] rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/25 backdrop-blur">
+    <div className="min-w-[130px] rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/25 backdrop-blur">
       <p className="text-[11px] font-bold text-emerald-100">{label}</p>
       <p className="tabular mt-1 text-base font-black text-white">{value}</p>
     </div>
   );
 }
 
-type Tone = 'green' | 'sky' | 'amber' | 'violet';
+type Tone = 'green' | 'rose' | 'sky' | 'amber' | 'violet';
 
 function StatCard({ icon, tone, label, value, sub, alert, delay }: { icon: React.ReactNode; tone: Tone; label: string; value: string; sub: string; alert?: boolean; delay: number }) {
   const tones: Record<Tone, string> = {
     green: 'from-emerald-500 to-teal-600 shadow-emerald-600/20',
+    rose: 'from-rose-500 to-pink-600 shadow-rose-600/20',
     sky: 'from-sky-500 to-blue-600 shadow-sky-600/20',
     amber: 'from-amber-500 to-orange-600 shadow-amber-600/20',
     violet: 'from-violet-500 to-purple-600 shadow-violet-600/20',
@@ -276,49 +309,6 @@ function summarySentence(overdue: number, dueToday: number, events: number): str
   return `امروز ${parts.join('، ')} داری. بزن بریم! 💪`;
 }
 
-export function CheckIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-/** نمودار روند نمره ۱۴ روز اخیر */
-function ScoreTrend() {
-  const { state } = useApp();
-  const today = todayStart();
-  const refMap = useMemo(() => reflectionMap(state.reflections), [state.reflections]);
-  const data = useMemo(() => {
-    const out: Array<{ label: string; value: number; color: string; dim?: boolean }> = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = addDays(today, -i);
-      const s = refMap.get(d)?.score ?? null;
-      out.push({
-        label: toFa(toJalaali(new Date(d)).jd),
-        value: s ?? 0,
-        color: s == null ? '#cbd5e1' : s >= 8 ? '#10b981' : s >= 5 ? '#f59e0b' : '#f43f5e',
-        dim: s == null,
-      });
-    }
-    return out;
-  }, [refMap, today]);
-  const scored = data.filter((d) => !d.dim);
-  const avgScore = scored.length ? Math.round((scored.reduce((a, d) => a + d.value, 0) / scored.length) * 10) / 10 : null;
-  return (
-    <div>
-      <Bars data={data} formatTick={(v) => (v > 0 ? formatScore(v) : '')} height={150} />
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-        <span>
-          میانگین روزهای نمره‌دار:{' '}
-          <b className="tabular text-violet-600 dark:text-violet-400">{avgScore != null ? `${formatScore(avgScore)} از ۱۰` : 'ثبت نشده'}</b>
-        </span>
-        <span>ستون کم‌رنگ = نمره ثبت نشده</span>
-      </div>
-    </div>
-  );
-}
-
 function TodayHabits() {
   const { state, toggleHabit } = useApp();
   const today = todayStart();
@@ -332,7 +322,7 @@ function TodayHabits() {
   }
   return (
     <ul className="space-y-2 px-5 pb-5">
-      {active.slice(0, 5).map((h) => {
+      {active.slice(0, 6).map((h) => {
         const done = !!state.habitLogs[`${h.id}:${today}`];
         const streak = habitStreak(h.id, state.habitLogs);
         return (
@@ -344,8 +334,11 @@ function TodayHabits() {
                 done ? 'border-transparent bg-emerald-500/10' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50 dark:border-white/5 dark:hover:bg-white/5',
               )}
             >
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full transition" style={{ background: done ? h.color : 'transparent', border: `2px solid ${h.color}` }}>
-                {done && <CheckIcon />}
+              <span
+                className={cx('grid h-7 w-7 shrink-0 place-items-center rounded-full transition', done ? 'text-white' : 'text-transparent')}
+                style={{ background: done ? h.color : 'transparent', border: `2px solid ${h.color}` }}
+              >
+                <CheckIcon size={13} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className={cx('block truncate text-[13px] font-bold', done ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200')}>{h.title}</span>
@@ -355,9 +348,9 @@ function TodayHabits() {
           </li>
         );
       })}
-      {active.length > 5 && (
+      {active.length > 6 && (
         <Link to="/habits" className="block pt-1 text-center text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400">
-          {toFa(active.length - 5)} عادت دیگر…
+          {toFa(active.length - 6)} عادت دیگر…
         </Link>
       )}
     </ul>
@@ -366,7 +359,7 @@ function TodayHabits() {
 
 function UpcomingTasks() {
   const { state, moveTask } = useApp();
-  const nowTs = useNow();
+  const today = useMemo(() => todayStart(), []);
   const list = useMemo(() => {
     const open = state.tasks.filter((t) => t.status !== 'done');
     const rank = (t: (typeof open)[number]) => {
@@ -386,7 +379,7 @@ function UpcomingTasks() {
   return (
     <ul className="space-y-2 px-5 pb-5">
       {list.map((t) => {
-        const d = t.due != null ? diffDays(t.due, nowTs) : null;
+        const d = t.due != null ? diffDays(t.due, today) : null;
         const tone = d == null ? 'slate' : d < 0 ? 'red' : d === 0 ? 'amber' : 'slate';
         const label = d == null ? 'بدون سررسید' : d === 0 ? 'امروز' : d === 1 ? 'فردا' : d < 0 ? `${toFa(Math.abs(d))} روز عقب` : smartDate(t.due!);
         const tones: Record<string, string> = {
@@ -401,20 +394,61 @@ function UpcomingTasks() {
               title="انجام شد"
               className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 border-slate-200 text-transparent transition hover:border-emerald-500 hover:bg-emerald-500 hover:text-white dark:border-white/15"
             >
-              <CheckIcon />
+              <CheckIcon size={13} />
             </button>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{t.title}</p>
               <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400">
                 <span className={cx('rounded-full px-2 py-0.5 font-bold', tones[tone])}>{label}</span>
-                {t.time && <span className="tabular">ساعت {clockToFa(t.time)}</span>}
                 {t.priority === 'high' && <span className="font-bold text-rose-500">• مهم</span>}
+                {t.time && <span className="tabular">• {toFa(t.time)}</span>}
               </p>
             </div>
             <Link to="/tasks" className="shrink-0 text-slate-300 transition hover:text-emerald-500"><CalendarDays size={16} /></Link>
           </li>
         );
       })}
+    </ul>
+  );
+}
+
+function TomorrowList() {
+  const { state } = useApp();
+  const tomorrow = useMemo(() => addDays(todayStart(), 1), []);
+  const tasks = useMemo(
+    () => state.tasks.filter((t) => !t.backlog && t.due === tomorrow && t.status !== 'done')
+      .sort((a, b) => (parseClock(a.time ?? '') ?? 9999) - (parseClock(b.time ?? '') ?? 9999)),
+    [state.tasks, tomorrow],
+  );
+  const events = useMemo(
+    () => state.events.filter((e) => e.day === tomorrow).sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99')),
+    [state.events, tomorrow],
+  );
+  if (tasks.length === 0 && events.length === 0) {
+    return (
+      <div className="px-5 pb-5">
+        <p className="rounded-2xl bg-slate-50 py-5 text-center text-xs text-slate-400 dark:bg-white/5">
+          فردا خالی است — امشب ۵ دقیقه وقت بگذار و مهم‌ترین کارها را بچین 🌙
+        </p>
+      </div>
+    );
+  }
+  return (
+    <ul className="space-y-2 px-5 pb-5">
+      {events.map((e) => (
+        <li key={e.id} className="flex items-center gap-3 rounded-2xl border border-slate-100 px-3 py-2.5 dark:border-white/5">
+          <span className="h-6 w-1 shrink-0 rounded-full" style={{ background: e.color }} />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{e.title}</span>
+          <span className="tabular shrink-0 text-[11px] font-bold text-slate-400">{e.time ? toFa(e.time) : 'بدون ساعت'}</span>
+        </li>
+      ))}
+      {tasks.map((t) => (
+        <li key={t.id} className="flex items-center gap-3 rounded-2xl bg-slate-50 px-3 py-2.5 dark:bg-white/[0.03]">
+          <span className={cx('h-6 w-1 shrink-0 rounded-full', t.priority === 'high' ? 'bg-rose-500' : t.priority === 'medium' ? 'bg-amber-400' : 'bg-sky-400')} />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-slate-700 dark:text-slate-200">{t.title}</span>
+          {t.time && <span className="tabular shrink-0 text-[11px] font-bold text-slate-400">{toFa(t.time)}</span>}
+        </li>
+      ))}
     </ul>
   );
 }
@@ -463,93 +497,38 @@ function TaskStatusDonut() {
   if (total + backlogN === 0) {
     return <p className="py-6 text-center text-xs text-slate-400">هنوز وظیفه‌ای ثبت نشده است</p>;
   }
-  const rate = total ? Math.round((done / total) * 100) : 0;
-  const rows = [
+  const data = [
     { label: 'برای انجام', value: todo, color: '#94a3b8' },
     { label: 'در حال انجام', value: doing, color: '#0ea5e9' },
     { label: 'انجام‌شده', value: done, color: '#10b981' },
     ...(backlogN > 0 ? [{ label: 'بک‌لاگ باز', value: backlogN, color: '#f59e0b' }] : []),
   ];
+  const rate = total ? Math.round((done / total) * 100) : 0;
   return (
     <>
-      <DonutRing data={rows} label="نرخ انجام" value={`${toFa(rate)}٪`} />
-      <div className="w-full space-y-2">
-        {rows.map((r) => (
-          <div key={r.label} className="flex items-center gap-2 text-xs">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: r.color }} />
-            <span className="flex-1 font-bold text-slate-600 dark:text-slate-300">{r.label}</span>
-            <span className="tabular font-black text-slate-700 dark:text-slate-100">{toFa(r.value)} تسک</span>
-            <span className="tabular w-10 text-left text-[11px] text-slate-400">
-              {toFa(Math.round((r.value / Math.max(1, total + backlogN)) * 100))}٪
-            </span>
-          </div>
-        ))}
+      <Donut data={data} centerTop="نرخ انجام" centerBottom={`${toFa(rate)}٪`} />
+      <div className="w-full">
+        <Legend items={data} format={(v) => `${toFa(v)} تسک`} />
       </div>
     </>
-  );
-}
-
-/** دونات ساده بدون وابستگی — SVG خالص */
-function DonutRing({ data, label, value }: { data: Array<{ label: string; value: number; color: string }>; label: string; value: string }) {
-  const size = 180;
-  const thickness = 24;
-  const r = (size - thickness) / 2;
-  const c = size / 2;
-  const C = 2 * Math.PI * r;
-  const total = data.reduce((a, d) => a + d.value, 0);
-  let acc = 0;
-  return (
-    <div className="relative inline-grid place-items-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={c} cy={c} r={r} fill="none" strokeWidth={thickness} className="stroke-slate-100 dark:stroke-white/10" />
-        {total > 0 && data.map((d) => {
-          const frac = d.value / total;
-          const dash = frac * C;
-          const off = acc * C;
-          acc += frac;
-          if (dash <= 0.5) return null;
-          return (
-            <circle
-              key={d.label}
-              cx={c}
-              cy={c}
-              r={r}
-              fill="none"
-              stroke={d.color}
-              strokeWidth={thickness}
-              strokeDasharray={`${Math.max(dash - 2, 0.5)} ${C - Math.max(dash - 2, 0.5)}`}
-              strokeDashoffset={-off}
-            >
-              <title>{`${d.label}: ${toFa(d.value)}`}</title>
-            </circle>
-          );
-        })}
-      </svg>
-      <div className="absolute inset-0 grid place-items-center text-center">
-        <div>
-          <div className="text-[11px] font-bold text-slate-400">{label}</div>
-          <div className="tabular text-lg font-black text-slate-800 dark:text-white">{value}</div>
-        </div>
-      </div>
-    </div>
   );
 }
 
 function WeekMood() {
   const { state } = useApp();
   const today = todayStart();
-  const refMap = useMemo(() => reflectionMap(state.reflections), [state.reflections]);
   const days: number[] = [];
   for (let i = 6; i >= 0; i--) days.push(addDays(today, -i));
+  const refs = new Map((state.reflections ?? []).map((r) => [r.day, r]));
   return (
     <div className="flex gap-1.5" dir="ltr">
       {days.map((d) => {
-        const r = refMap.get(d);
+        const r = refs.get(d);
         const isToday = d === today;
         return (
           <div
             key={d}
-            title={`${formatJalali(d)}${r ? ` — حال: ${moodFace(r.mood)}${r.score != null ? ` • نمره: ${formatScore(r.score)}` : ''}` : ' — ثبت نشده'}`}
+            title={`${formatJalali(d)}${r ? ` — حال: ${moodFace(r.mood)}${r.score != null ? ` • نمره: ${formatScore(r.score)}` : ' • نمره ثبت نشده'}` : ' — ثبت نشده'}`}
             className={cx(
               'flex flex-1 flex-col items-center gap-1 rounded-xl border py-2 transition',
               r ? 'border-transparent bg-violet-500/10' : 'border-slate-100 dark:border-white/5',
@@ -558,12 +537,10 @@ function WeekMood() {
           >
             <span className="text-lg leading-none">{moodFace(r?.mood)}</span>
             <span className="tabular text-[10px] font-black text-slate-400">{toFa(toJalaali(new Date(d)).jd)}</span>
-            {r?.score != null ? (
+            {r?.score != null && (
               <span className="tabular rounded-full bg-amber-500/15 px-1.5 text-[9px] font-black text-amber-600 dark:text-amber-300">
                 {formatScore(r.score)}
               </span>
-            ) : (
-              <span className="text-[8px] font-bold text-slate-400">ثبت نشده</span>
             )}
           </div>
         );
@@ -591,33 +568,20 @@ function RecentReflections() {
     );
   }
   return (
-    <ul className="grid gap-2 px-5 pb-5 sm:grid-cols-2">
+    <ul className="space-y-2 px-5 pb-5">
       {list.map((r) => (
         <li key={r.day} className="rounded-2xl border border-slate-100 p-3 dark:border-white/5">
           <div className="flex items-center gap-2">
             <span className="text-xl">{moodFace(r.mood)}</span>
-            <Link to="/insights" className="min-w-0 flex-1">
-              <p className="text-xs font-black text-slate-700 hover:underline dark:text-slate-200">{formatJalali(r.day, { weekday: true })}</p>
-              <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                {r.wins?.trim() ? `🏆 ${r.wins.split('\n')[0]}` : '🏆 دستاوردها ثبت نشده'}
-              </p>
-            </Link>
-            <span className={cx(
-              'tabular shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black',
-              r.score == null ? 'bg-slate-100 text-slate-400 dark:bg-white/5'
-                : r.score >= 8 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-                  : r.score >= 5 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300'
-                    : 'bg-rose-500/10 text-rose-600 dark:text-rose-300',
-            )}>
-            {r.score != null ? formatScore(r.score) : 'ثبت نشده'}
-            {r.score != null && <span className="text-[9px] opacity-70"> /۱۰</span>}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black text-slate-700 dark:text-slate-200">{formatJalali(r.day, { weekday: true })}</p>
+              {r.dayNote && <p className="mt-0.5 truncate text-[11px] text-slate-400">📝 {r.dayNote.split('\n')[0]}</p>}
+              {!r.dayNote && r.wins && <p className="mt-0.5 truncate text-[11px] text-slate-400">🏆 {r.wins.split('\n')[0]}</p>}
+            </div>
+            <span className={cx('tabular shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black', r.score != null ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300' : 'bg-slate-100 text-slate-400 dark:bg-white/10')}>
+              {r.score != null ? <><Star size={11} className="inline" /> {formatScore(r.score)}</> : 'ثبت نشده'}
             </span>
           </div>
-          {r.dayNote?.trim() && (
-            <p className="mt-2 line-clamp-2 rounded-xl bg-slate-50 px-2.5 py-1.5 text-[11px] leading-5 text-slate-500 dark:bg-white/5 dark:text-slate-400">
-              {r.dayNote}
-            </p>
-          )}
         </li>
       ))}
     </ul>

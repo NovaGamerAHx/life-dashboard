@@ -9,9 +9,8 @@ import { PRIORITY_META, STATUS_META, type Task, type TaskPriority, type TaskStat
 import { Card, Btn, Empty, Progress, inputCls, Confirm } from '../components/ui';
 import { TaskModal } from '../components/forms';
 import { cx } from '../lib/utils';
-import { toFa, diffDays, smartDate, clockToFa } from '../lib/jalali';
+import { toFa, diffDays, smartDate, todayStart } from '../lib/jalali';
 import { taskProgress } from '../lib/stats';
-import { useNow } from '../lib/hooks';
 import { dueTone } from '../components/navBadges';
 
 const COLS: Array<{ k: TaskStatus; tint: string; dot: string }> = [
@@ -24,6 +23,7 @@ type SortK = 'due' | 'priority' | 'newest';
 
 export default function Tasks() {
   const { state, moveTask, deleteTask, updateTask } = useApp();
+  const todayTs = useMemo(() => todayStart(), []);
   const [q, setQ] = useState('');
   const [priF, setPriF] = useState<'all' | TaskPriority>('all');
   const [sort, setSort] = useState<SortK>('due');
@@ -82,11 +82,10 @@ export default function Tasks() {
     return m;
   }, [filtered]);
 
-  const nowTs = useNow();
   const total = state.tasks.filter((t) => !t.backlog).length;
   const doneList = state.tasks.filter((t) => !t.backlog && t.status === 'done');
   const done = doneList.length;
-  const overdue = state.tasks.filter((t) => !t.backlog && t.status !== 'done' && t.due != null && diffDays(t.due, nowTs) < 0).length;
+  const overdue = state.tasks.filter((t) => !t.backlog && t.status !== 'done' && t.due != null && diffDays(t.due, todayTs) < 0).length;
 
   const toggleExpand = (id: string) =>
     setExpanded((p) => {
@@ -299,8 +298,8 @@ function TaskCard({
               {dueLabel}
             </span>
             {t.time && (
-              <span className="tabular inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-white/10 dark:text-slate-300">
-                {clockToFa(t.time)}
+              <span className="tabular inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-white/10 dark:text-slate-300" dir="ltr">
+                {t.time}
               </span>
             )}
             <span className={cx('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold', pri.bg, pri.color)}>
@@ -390,9 +389,9 @@ function QuickMove({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
-export function smartDueFull(t: Task, now = Date.now()): string {
+export function smartDueFull(t: Task): string {
   if (t.due == null) return 'بدون سررسید';
-  const d = diffDays(t.due, now);
+  const d = diffDays(t.due, Date.now());
   if (d === 0) return 'امروز';
   if (d === 1) return 'فردا';
   if (d === -1) return 'دیروز — عقب‌افتاده';

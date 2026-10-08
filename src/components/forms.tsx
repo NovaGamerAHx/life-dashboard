@@ -1,34 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Plus, Trash2, Check, Eraser } from 'lucide-react';
-import { Modal, Field, Btn, inputCls, Segmented, TimeField } from './ui';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, Plus, Trash2, Check, Eraser, Clock } from 'lucide-react';
+import { Modal, Field, Btn, inputCls, Segmented, CheckIcon } from './ui';
 import { cx, uid } from '../lib/utils';
 import {
   toJalaali, toGregorian, jalaaliMonthLength, J_MONTHS, toFa,
-  formatJalali, todayStart, startOfDay, normalizeClockText,
+  formatJalali, todayStart, startOfDay, normalizeClock, parseScoreInput,
+  formatScore, roundScore,
 } from '../lib/jalali';
 import { useApp } from '../lib/store';
-import { EVENT_COLORS, HABIT_COLORS, NOTE_COLORS, PRIORITY_META, type CalEvent, type Habit, type Note, type Task, type TaskPriority, type TaskStatus } from '../lib/types';
-
-/** نام ربع ماتریس آیزنهاور */
-export function eisenLabel(important: boolean, urgent: boolean): string {
-  if (important && urgent) return '۱ • مهم و فوری (انجام بده)';
-  if (important && !urgent) return '۲ • مهم و غیرفوری (برنامه‌ریزی کن)';
-  if (!important && urgent) return '۳ • غیرمهم و فوری (بسپار)';
-  return '۴ • غیرمهم و غیرفوری (حذف کن)';
-}
-
-/** رنگ ربع آیزنهاور */
-export function eisenColor(important: boolean, urgent: boolean): string {
-  if (important && urgent) return '#ef4444';
-  if (important && !urgent) return '#3b82f6';
-  if (!important && urgent) return '#f59e0b';
-  return '#94a3b8';
-}
-
-/** تعیین مهم/فوری بودن تسک */
-export function eisenOf(t: Task): { important: boolean; urgent: boolean } {
-  return { important: t.priority === 'high', urgent: t.urgent ?? t.priority === 'high' };
-}
+import {
+  EVENT_COLORS, HABIT_COLORS, NOTE_COLORS, PRIORITY_META, SCORE_STEP,
+  type CalEvent, type Habit, type Note, type Task, type TaskPriority, type TaskStatus,
+} from '../lib/types';
 
 // ── فیلد تاریخ شمسی ─────────────────────────────────────────
 export function JalaliDateField({
@@ -38,18 +21,12 @@ export function JalaliDateField({
   onChange: (v: number | null) => void;
   allowClear?: boolean;
 }) {
-  const cur = value != null ? toJalaali(new Date(value)) : toJalaali(new Date());
-  const [jy, setJy] = useState(cur.jy);
-  const [jm, setJm] = useState(cur.jm);
-  const [jd, setJd] = useState(cur.jd);
-
-  useEffect(() => {
-    if (value != null) {
-      const j = toJalaali(new Date(value));
-      setJy(j.jy); setJm(j.jm); setJd(j.jd);
-    }
-     
-  }, [value]);
+  const derived = toJalaali(new Date(value ?? todayStart()));
+  // تا وقتی کاربر انتخاب دستی نکرده، مقدار نمایش‌داده‌شده از پراپ `value` می‌آید
+  const [draft, setDraft] = useState<{ jy: number; jm: number; jd: number } | null>(null);
+  const cur = draft ?? { jy: derived.jy, jm: derived.jm, jd: derived.jd };
+  const { jy, jm, jd } = cur;
+  const pick = (next: { jy: number; jm: number; jd: number }) => setDraft(next);
 
   const monthLen = jalaaliMonthLength(jy, jm);
   const years = useMemo(() => {
@@ -61,26 +38,26 @@ export function JalaliDateField({
 
   const commit = (y: number, m: number, d: number) => {
     const dd = Math.min(d, jalaaliMonthLength(y, m));
+    pick({ jy: y, jm: m, jd: dd });
     try {
-      const g = toGregorian(y, m, dd).getTime();
-      onChange(startOfDay(g));
-    } catch { /* نامعتبر */ }
+      onChange(startOfDay(toGregorian(y, m, dd).getTime()));
+    } catch { /* تاریخ نامعتبر نادیده گرفته می‌شود */ }
   };
 
   return (
     <div>
       <div className="grid grid-cols-3 gap-2">
-        <select value={jd} onChange={(e) => { const d = Number(e.target.value); setJd(d); commit(jy, jm, d); }} className={inputCls}>
+        <select value={Math.min(jd, monthLen)} onChange={(e) => commit(jy, jm, Number(e.target.value))} className={inputCls}>
           {Array.from({ length: monthLen }, (_, i) => i + 1).map((d) => (
             <option key={d} value={d}>{toFa(d)}</option>
           ))}
         </select>
-        <select value={jm} onChange={(e) => { const m = Number(e.target.value); setJm(m); commit(jy, m, jd); }} className={inputCls}>
+        <select value={jm} onChange={(e) => commit(jy, Number(e.target.value), jd)} className={inputCls}>
           {J_MONTHS.map((m, i) => (
             <option key={i} value={i + 1}>{m}</option>
           ))}
         </select>
-        <select value={jy} onChange={(e) => { const y = Number(e.target.value); setJy(y); commit(y, jm, jd); }} className={inputCls}>
+        <select value={jy} onChange={(e) => commit(Number(e.target.value), jm, jd)} className={inputCls}>
           {years.map((y) => (
             <option key={y} value={y}>{toFa(y)}</option>
           ))}
@@ -96,8 +73,7 @@ export function JalaliDateField({
             type="button"
             onClick={() => {
               const t = todayStart();
-              const j = toJalaali(new Date(t));
-              setJy(j.jy); setJm(j.jm); setJd(j.jd);
+              setDraft(null);
               onChange(t);
             }}
             className="rounded-lg bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
@@ -107,7 +83,7 @@ export function JalaliDateField({
           {allowClear && value != null && (
             <button
               type="button"
-              onClick={() => onChange(null)}
+              onClick={() => { setDraft(null); onChange(null); }}
               className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-300"
             >
               <Eraser size={12} /> پاک
@@ -115,6 +91,256 @@ export function JalaliDateField({
           )}
         </span>
       </div>
+    </div>
+  );
+}
+
+// ── فیلد ساعت (همیشه ۲۴ ساعته — بدون AM/PM) ─────────────────
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
+export function TimeField({
+  value, onChange, allowClear = true, placeholder = '۰۰:۰۰', className,
+}: {
+  /** مقدار به شکل «HH:MM» و ۲۴ ساعته؛ رشته خالی یعنی ثبت نشده */
+  value: string;
+  onChange: (v: string) => void;
+  allowClear?: boolean;
+  placeholder?: string;
+  className?: string;
+}) {
+  // متن ورودی تا وقتی کاربر در حال تایپ است «پیش‌نویس» می‌ماند، پس افکت هم‌گام‌سازی لازم نیست
+  const [draft, setDraft] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [err, setErr] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const txt = draft ?? (value ? toFa(value) : '');
+
+  // بستن پنل با کلیک بیرون / Escape
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const commitText = (raw: string) => {
+    setDraft(raw);
+    if (!raw.trim()) {
+      setErr(false);
+      onChange('');
+      return;
+    }
+    const norm = normalizeClock(raw);
+    if (norm) {
+      setErr(false);
+      onChange(norm);
+    } else {
+      setErr(true);
+    }
+  };
+
+  const [hh, mm] = value ? value.split(':') : ['', ''];
+  const setPart = (h: string, m: string) => {
+    const next = `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+    onChange(normalizeClock(next) ?? '');
+  };
+
+  return (
+    <div ref={boxRef} className={cx('relative', className)}>
+      <div className="flex gap-2">
+        <input
+          value={txt}
+          onChange={(e) => commitText(e.target.value)}
+          onBlur={() => {
+            // با پایان تایپ، متن به مقدار استاندارد ذخیره‌شده برمی‌گردد
+            setDraft(null);
+            setErr(false);
+          }}
+          inputMode="numeric"
+          dir="ltr"
+          placeholder={placeholder}
+          aria-label="ساعت (۲۴ ساعته)"
+          className={cx(inputCls, 'tabular text-center', err && 'border-rose-400 focus:border-rose-500')}
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          title="انتخاب ساعت از فهرست (۰ تا ۲۳)"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50/50 text-slate-500 transition hover:border-emerald-400 hover:text-emerald-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300"
+        >
+          <Clock size={16} />
+        </button>
+        {allowClear && value && (
+          <button
+            type="button"
+            onClick={() => { setDraft(null); onChange(''); }}
+            title="پاک کردن ساعت"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-rose-300 hover:text-rose-500 dark:border-white/10"
+          >
+            <Eraser size={15} />
+          </button>
+        )}
+      </div>
+
+      {err && (
+        <p className="mt-1 text-[11px] font-bold text-rose-500">
+          ساعت معتبر نیست — قالب ۲۴ ساعته مثل ۰۷:۳۰ یا ۲۳:۵۹ بنویسید
+        </p>
+      )}
+
+      {open && (
+        <div className="absolute z-40 mt-1 w-full min-w-[210px] rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-white/10 dark:bg-slate-900">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-[10px] font-bold text-slate-400">
+              ساعت
+              <select
+                value={hh}
+                onChange={(e) => setPart(e.target.value, mm || '00')}
+                className={cx(inputCls, 'tabular mt-1 h-9')}
+              >
+                <option value="">—</option>
+                {HOURS.map((h) => <option key={h} value={h}>{toFa(h)}</option>)}
+              </select>
+            </label>
+            <label className="text-[10px] font-bold text-slate-400">
+              دقیقه
+              <select
+                value={mm}
+                onChange={(e) => setPart(hh || '00', e.target.value)}
+                className={cx(inputCls, 'tabular mt-1 h-9')}
+              >
+                <option value="">—</option>
+                {MINUTES.map((m) => <option key={m} value={m}>{toFa(m)}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="mt-2 flex gap-1.5">
+            <Btn size="xs" variant="soft" onClick={() => { setPart(String(new Date().getHours()), String(new Date().getMinutes())); }}>
+              الان
+            </Btn>
+            <Btn size="xs" variant="ghost" onClick={() => setOpen(false)}>بستن</Btn>
+          </div>
+          <p className="mt-2 text-[10px] leading-5 text-slate-400">
+            همه ساعت‌ها در برنامه ۲۴ ساعته‌اند: از ۰۰:۰۰ تا ۲۳:۵۹ (بدون AM/PM).
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── فیلد نمره روز: نوار لغزان + ورود دستی عدد ───────────────
+export function ScoreField({
+  value, onChange, compact,
+}: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  compact?: boolean;
+}) {
+  // متن جعبه عدد تا پایان تایپ «پیش‌نویس» است؛ در غیر این صورت از خود نمره ساخته می‌شود
+  const [draft, setDraft] = useState<string | null>(null);
+  const [err, setErr] = useState(false);
+  const txt = draft ?? (value != null ? formatScore(value) : '');
+
+  const commit = (raw: string) => {
+    setDraft(raw);
+    if (!raw.trim()) {
+      setErr(false);
+      onChange(null);
+      return;
+    }
+    const n = parseScoreInput(raw);
+    if (n == null) {
+      setErr(true);
+      return;
+    }
+    setErr(false);
+    onChange(n);
+  };
+
+  const slider = value ?? 5;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2.5">
+        <input
+          type="range"
+          min={0}
+          max={10}
+          step={SCORE_STEP}
+          value={slider}
+          onChange={(e) => onChange(roundScore(Number(e.target.value)))}
+          dir="ltr"
+          aria-label="نمره روز (نوار لغزان)"
+          className="h-2 flex-1 cursor-pointer accent-amber-500"
+        />
+        <input
+          value={txt}
+          onChange={(e) => commit(e.target.value)}
+          onBlur={() => { setDraft(null); setErr(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            if (e.key === 'ArrowUp' && value != null) { e.preventDefault(); onChange(roundScore(value + SCORE_STEP)); }
+            if (e.key === 'ArrowDown' && value != null) { e.preventDefault(); onChange(roundScore(value - SCORE_STEP)); }
+          }}
+          inputMode="decimal"
+          dir="ltr"
+          placeholder="۸٫۵"
+          title="ورود دستی نمره (۰ تا ۱۰ با یک رقم اعشار)"
+          className={cx(
+            inputCls,
+            'tabular h-10 w-20 shrink-0 text-center text-base font-black',
+            err ? 'border-rose-400' : value != null ? 'border-amber-400/60 bg-amber-500/5' : '',
+          )}
+        />
+        <button
+          type="button"
+          onClick={() => onChange(value == null ? 5 : null)}
+          title={value == null ? 'ثبت نمره' : 'پاک کردن نمره'}
+          className={cx(
+            'grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[11px] font-black transition',
+            value != null ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300' : 'bg-slate-100 text-slate-400 dark:bg-white/10',
+          )}
+        >
+          {value != null ? <Eraser size={15} /> : <CheckIcon size={15} />}
+        </button>
+      </div>
+      {!compact && (
+        <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-bold text-slate-400">
+          <span>۰ افتضاح</span>
+          <span className="text-slate-300 dark:text-slate-600">|</span>
+          <span>۵ متوسط</span>
+          <span className="text-slate-300 dark:text-slate-600">|</span>
+          <span>۱۰ عالی</span>
+          <span className="ms-auto flex gap-1">
+            {[0, 5, 7.5, 10].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => onChange(v)}
+                className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-500 transition hover:bg-amber-500/15 hover:text-amber-600 dark:bg-white/10 dark:text-slate-300"
+              >
+                {formatScore(v)}
+              </button>
+            ))}
+          </span>
+        </div>
+      )}
+      {err && (
+        <p className="text-[11px] font-bold text-rose-500">
+          عدد نمره معتبر نیست — بین ۰ تا ۱۰ (مثلاً ۷٫۵) وارد کنید
+        </p>
+      )}
     </div>
   );
 }
@@ -142,65 +368,56 @@ export function ColorDots({ colors, value, onChange }: { colors: string[]; value
 }
 
 // ── مودال وظیفه ─────────────────────────────────────────────
-export function TaskModal({
-  open, onClose, edit, presetDue, presetBacklog,
-}: {
-  open: boolean; onClose: () => void; edit?: Task | null;
-  presetDue?: number | null; presetBacklog?: boolean;
-}) {
+interface TaskModalProps {
+  open: boolean;
+  onClose: () => void;
+  edit?: Task | null;
+  presetDue?: number | null;
+  presetBacklog?: boolean;
+}
+
+export function TaskModal(props: TaskModalProps) {
+  const { open, edit } = props;
+  return (
+    <Modal open={open} onClose={props.onClose} title={edit ? 'ویرایش وظیفه' : 'وظیفه جدید'} wide>
+      {open && <TaskForm {...props} />}
+    </Modal>
+  );
+}
+
+/** فرم وظیفه — با هر بار باز شدن مودال از نو ساخته می‌شود، پس نیازی به هم‌گام‌سازی با افکت نیست */
+function TaskForm({ onClose, edit, presetDue, presetBacklog }: Omit<TaskModalProps, 'open'>) {
   const { state, addTask, updateTask } = useApp();
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
-  const [status, setStatus] = useState<TaskStatus>('todo');
-  const [priority, setPriority] = useState<TaskPriority>('medium');
-  const [tagsTxt, setTagsTxt] = useState('');
-  const [due, setDue] = useState<number | null>(null);
-  const [backlog, setBacklog] = useState(false);
-  const [urgent, setUrgent] = useState(false);
-  const [deadline, setDeadline] = useState<number | null>(null);
-  const [time, setTime] = useState('');
-  const [durationMin, setDurationMin] = useState(60);
-  const [actualTxt, setActualTxt] = useState('');
-  const [result, setResult] = useState('');
-  const [subs, setSubs] = useState<Array<{ id: string; title: string; done: boolean }>>([]);
+  const [title, setTitle] = useState(edit?.title ?? '');
+  const [desc, setDesc] = useState(edit?.desc ?? '');
+  const [status, setStatus] = useState<TaskStatus>(edit?.status ?? 'todo');
+  const [priority, setPriority] = useState<TaskPriority>(edit?.priority ?? 'medium');
+  const [tagsTxt, setTagsTxt] = useState(edit?.tags.join('، ') ?? '');
+  const [due, setDue] = useState<number | null>(edit ? edit.due : (presetDue !== undefined ? presetDue : null));
+  const [backlog, setBacklog] = useState(edit ? !!edit.backlog : !!presetBacklog);
+  const [urgent, setUrgent] = useState(edit ? (edit.urgent ?? edit.priority === 'high') : false);
+  const [deadline, setDeadline] = useState<number | null>(edit?.deadline ?? null);
+  const [time, setTime] = useState(edit?.time ?? '');
+  const [durationMin, setDurationMin] = useState(edit?.durationMin ?? 60);
+  const [actualTxt, setActualTxt] = useState(edit?.actualMin != null ? String(edit.actualMin) : '');
+  const [result, setResult] = useState(edit?.result ?? '');
+  const [subs, setSubs] = useState<Array<{ id: string; title: string; done: boolean }>>(edit?.subtasks.map((s) => ({ ...s })) ?? []);
   const [newSub, setNewSub] = useState('');
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    if (open) {
-      setTitle(edit?.title ?? '');
-      setDesc(edit?.desc ?? '');
-      setStatus(edit?.status ?? 'todo');
-      setPriority(edit?.priority ?? 'medium');
-      setTagsTxt(edit?.tags.join('، ') ?? '');
-      setDue(edit ? edit.due : (presetDue !== undefined ? presetDue : null));
-      setBacklog(edit ? !!edit.backlog : !!presetBacklog);
-      setUrgent(edit ? (edit.urgent ?? edit.priority === 'high') : false);
-      setDeadline(edit?.deadline ?? null);
-      setTime(edit?.time ?? '');
-      setDurationMin(edit?.durationMin ?? 60);
-      setActualTxt(edit?.actualMin != null ? String(edit.actualMin) : '');
-      setResult(edit?.result ?? '');
-      setSubs(edit?.subtasks.map((s) => ({ ...s })) ?? []);
-      setNewSub('');
-      setErr('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open ]);
-
   const save = () => {
     if (!title.trim()) { setErr('عنوان وظیفه را بنویسید'); return; }
-    const timeNorm = time.trim() ? normalizeClockText(time) : null;
-    if (time.trim() && !timeNorm) { setErr('ساعت را ۲۴ساعته و به شکل ۰۹:۳۰ یا ۲۲:۱۵ بنویسید'); return; }
+    if (time && !normalizeClock(time)) { setErr('ساعت معتبر نیست (قالب ۲۴ ساعته مثل ۱۴:۳۰)'); return; }
     const tags = tagsTxt.split(/[،,]/).map((t) => t.trim()).filter(Boolean).slice(0, 8);
-    const actual = actualTxt.trim() === '' ? undefined : Math.min(10080, Math.max(1, Number(actualTxt.replace(/[^0-9]/g, '')) || 0)) || undefined;
+    const actualNum = Number(actualTxt.replace(/[^0-9]/g, ''));
+    const actual = actualTxt.trim() === '' || !actualNum ? undefined : Math.min(10080, Math.max(1, actualNum));
     const payload = {
       title: title.trim(), desc: desc.trim() || undefined, status, priority, tags,
       due: backlog ? null : due,
       backlog,
       urgent,
       deadline,
-      time: timeNorm ?? undefined,
+      time: time ? normalizeClock(time) ?? undefined : undefined,
       durationMin: Math.min(1440, Math.max(5, durationMin || 60)),
       actualMin: actual,
       result: result.trim() || undefined,
@@ -212,243 +429,247 @@ export function TaskModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={edit ? 'ویرایش وظیفه' : 'وظیفه جدید'} wide>
-      <div className="space-y-4">
-        <Field label="عنوان وظیفه">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="مثلاً تحویل گزارش ماهانه" />
+    <div className="space-y-4">
+      <Field label="عنوان وظیفه">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="مثلاً تحویل گزارش ماهانه" />
+      </Field>
+      <Field label="توضیح (اختیاری)">
+        <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} className={cx(inputCls, 'h-auto py-2.5')} placeholder="جزئیات بیشتر…" />
+      </Field>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Field label="وضعیت">
+          <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={inputCls}>
+            <option value="todo">برای انجام</option>
+            <option value="doing">در حال انجام</option>
+            <option value="done">انجام‌شده</option>
+          </select>
         </Field>
-        <Field label="توضیح (اختیاری)">
-          <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} className={cx(inputCls, 'h-auto py-2.5')} placeholder="جزئیات بیشتر…" />
-        </Field>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="وضعیت">
-            <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={inputCls}>
-              <option value="todo">برای انجام</option>
-              <option value="doing">در حال انجام</option>
-              <option value="done">انجام‌شده</option>
-            </select>
-          </Field>
-          <Field label="اهمیت (ماتریس آیزنهاور)">
-            <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={inputCls}>
-              {(Object.keys(PRIORITY_META) as TaskPriority[]).map((p) => (
-                <option key={p} value={p}>{PRIORITY_META[p].label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="فوریت (ماتریس آیزنهاور)">
-            <Segmented
-              value={urgent ? 'urgent' : 'not'}
-              onChange={(v) => setUrgent(v === 'urgent')}
-              options={[{ v: 'urgent', label: '🔥 فوری' }, { v: 'not', label: 'غیرفوری' }]}
-            />
-          </Field>
-        </div>
-        <div className="rounded-2xl bg-slate-50/70 px-3.5 py-2.5 text-[11px] font-bold text-slate-500 dark:bg-white/[0.03] dark:text-slate-400">
-          ربع آیزنهاور: <b>{eisenLabel(priority === 'high', urgent)}</b>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="برچسب‌ها (با ویرگول جدا کنید)">
-            <input value={tagsTxt} onChange={(e) => setTagsTxt(e.target.value)} className={inputCls} placeholder="کاری، مهم" />
-          </Field>
-          <Field label="ددلاین (اختیاری — مستقل از روز انجام)">
-            <JalaliDateField value={deadline} onChange={setDeadline} />
-          </Field>
-        </div>
-        <Field label="سررسید (اختیاری)">
-          <JalaliDateField value={due} onChange={setDue} />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="ساعت شروع (اختیاری — ۲۴ساعته)" hint="برای تایم‌لاین روز استفاده می‌شود">
-            <TimeField value={time} onChange={setTime} ariaLabel="ساعت شروع وظیفه" />
-          </Field>
-          <Field label="مدت برنامه‌ریزی‌شده (دقیقه)">
-            <input
-              value={String(durationMin)}
-              onChange={(e) => {
-                const n = Number(e.target.value.replace(/[^0-9]/g, ''));
-                if (!Number.isNaN(n)) setDurationMin(Math.min(1440, Math.max(0, n)));
-              }}
-              inputMode="numeric"
-              dir="ltr"
-              className={cx(inputCls, 'tabular text-center')}
-            />
-          </Field>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="زمان واقعی صرف‌شده (دقیقه — اختیاری)">
-            <input value={actualTxt} onChange={(e) => setActualTxt(e.target.value.replace(/[^۰-۹۰-۹0-9]/g, ''))} inputMode="numeric" placeholder="مثلاً ۹۰" className={cx(inputCls, 'tabular')} />
-          </Field>
-          <Field label="یادداشت / نتیجه (اختیاری)">
-            <input value={result} onChange={(e) => setResult(e.target.value)} placeholder="نتیجه انجام…" className={inputCls} />
-          </Field>
-        </div>
-        {(state.taskCats ?? []).length > 0 && (
-          <div>
-            <span className="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">دسته (اختیاری)</span>
-            <div className="flex flex-wrap gap-1.5">
-              {(state.taskCats ?? []).map((c) => {
-                const on = tagsTxt.split(/[،,]/).map((t) => t.trim()).includes(c.name);
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      const cur = tagsTxt.split(/[،,]/).map((t) => t.trim()).filter(Boolean);
-                      setTagsTxt(on ? cur.filter((t) => t !== c.name).join('، ') : [...cur, c.name].join('، '));
-                    }}
-                    className={cx(
-                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition',
-                      on ? 'border-transparent text-white' : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-white/10 dark:text-slate-300',
-                    )}
-                    style={on ? { background: c.color } : undefined}
-                  >
-                    <span className="h-2 w-2 rounded-full" style={{ background: on ? '#fff' : c.color }} />
-                    {c.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        <label className="flex cursor-pointer items-center gap-2 rounded-2xl border border-dashed border-slate-200 px-3.5 py-3 text-xs font-bold text-slate-500 dark:border-white/10 dark:text-slate-400">
-          <input type="checkbox" checked={backlog} onChange={(e) => setBacklog(e.target.checked)} className="h-4 w-4 accent-emerald-600" />
-          <span>
-            نگه داشتن در بک‌لاگ
-            <span className="block text-[11px] font-normal text-slate-400">کار بدون روز مشخص؛ بعداً با یک کلیک زمان‌بندی‌اش کن</span>
-          </span>
-        </label>
-        <div>
-          <span className="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">زیروظایف</span>
-          <div className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/60 p-3 dark:border-white/5 dark:bg-white/[0.02]">
-            {subs.map((s) => (
-              <div key={s.id} className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSubs((p) => p.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)))}
-                  className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition', s.done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white dark:border-white/20 dark:bg-transparent')}
-                >
-                  {s.done && <Check size={14} />}
-                </button>
-                <input
-                  value={s.title}
-                  onChange={(e) => setSubs((p) => p.map((x) => (x.id === s.id ? { ...x, title: e.target.value } : x)))}
-                  className={cx(inputCls, 'h-9', s.done && 'line-through opacity-60')}
-                  placeholder="عنوان زیروظیفه"
-                />
-                <button type="button" onClick={() => setSubs((p) => p.filter((x) => x.id !== s.id))} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 hover:bg-rose-500/10 hover:text-rose-500">
-                  <Trash2 size={15} />
-                </button>
-              </div>
+        <Field label="اهمیت (آیزنهاور)">
+          <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={inputCls}>
+            {(Object.keys(PRIORITY_META) as TaskPriority[]).map((p) => (
+              <option key={p} value={p}>{PRIORITY_META[p].label}</option>
             ))}
-            <div className="flex gap-2">
-              <input
-                value={newSub}
-                onChange={(e) => setNewSub(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newSub.trim()) {
-                    e.preventDefault();
-                    setSubs((p) => [...p, { id: uid('st'), title: newSub.trim(), done: false }]);
-                    setNewSub('');
-                  }
-                }}
-                className={inputCls}
-                placeholder="زیروظیفه جدید + Enter"
-              />
-              <Btn variant="soft" onClick={() => { if (newSub.trim()) { setSubs((p) => [...p, { id: uid('st'), title: newSub.trim(), done: false }]); setNewSub(''); } }}>
-                <Plus size={15} />
-              </Btn>
-            </div>
+          </select>
+        </Field>
+        <Field label="فوریت (آیزنهاور)">
+          <Segmented
+            value={urgent ? 'urgent' : 'not'}
+            onChange={(v) => setUrgent(v === 'urgent')}
+            options={[{ v: 'urgent', label: '🔥 فوری' }, { v: 'not', label: 'غیرفوری' }]}
+          />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="برچسب‌ها (با ویرگول جدا کنید)">
+          <input value={tagsTxt} onChange={(e) => setTagsTxt(e.target.value)} className={inputCls} placeholder="کاری، مهم" />
+        </Field>
+        <Field label="ددلاین (اختیاری — مستقل از روز انجام)">
+          <JalaliDateField value={deadline} onChange={setDeadline} />
+        </Field>
+      </div>
+      <Field label="سررسید (اختیاری)">
+        <JalaliDateField value={due} onChange={setDue} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="ساعت شروع (۲۴ ساعته — برای تایم‌لاین)">
+          <TimeField value={time} onChange={setTime} placeholder="۰۹:۳۰" />
+        </Field>
+        <Field label="مدت برنامه‌ریزی‌شده (دقیقه)">
+          <input
+            value={String(durationMin)}
+            onChange={(e) => {
+              const n = Number(e.target.value.replace(/[^0-9]/g, ''));
+              if (!Number.isNaN(n)) setDurationMin(Math.min(1440, Math.max(0, n)));
+            }}
+            inputMode="numeric"
+            dir="ltr"
+            className={cx(inputCls, 'tabular text-center')}
+          />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="زمان واقعی صرف‌شده (دقیقه — اختیاری)">
+          <input value={actualTxt} onChange={(e) => setActualTxt(e.target.value.replace(/[^0-9۰-۹]/g, ''))} inputMode="numeric" placeholder="مثلاً ۹۰" className={cx(inputCls, 'tabular')} />
+        </Field>
+        <Field label="یادداشت / نتیجه (اختیاری)">
+          <input value={result} onChange={(e) => setResult(e.target.value)} placeholder="نتیجه انجام…" className={inputCls} />
+        </Field>
+      </div>
+      {(state.taskCats ?? []).length > 0 && (
+        <div>
+          <span className="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">دسته (اختیاری)</span>
+          <div className="flex flex-wrap gap-1.5">
+            {(state.taskCats ?? []).map((c) => {
+              const on = tagsTxt.split(/[،,]/).map((t) => t.trim()).includes(c.name);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    const cur = tagsTxt.split(/[،,]/).map((t) => t.trim()).filter(Boolean);
+                    setTagsTxt(on ? cur.filter((t) => t !== c.name).join('، ') : [...cur, c.name].join('، '));
+                  }}
+                  className={cx(
+                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition',
+                    on ? 'border-transparent text-white' : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-white/10 dark:text-slate-300',
+                  )}
+                  style={on ? { background: c.color } : undefined}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: on ? '#fff' : c.color }} />
+                  {c.name}
+                </button>
+              );
+            })}
           </div>
         </div>
-        {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
-        <div className="flex justify-end gap-2">
-          <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
-          <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'افزودن وظیفه'}</Btn>
+      )}
+      <label className="flex cursor-pointer items-center gap-2 rounded-2xl border border-dashed border-slate-200 px-3.5 py-3 text-xs font-bold text-slate-500 dark:border-white/10 dark:text-slate-400">
+        <input type="checkbox" checked={backlog} onChange={(e) => setBacklog(e.target.checked)} className="h-4 w-4 accent-emerald-600" />
+        <span>
+          نگه داشتن در بک‌لاگ
+          <span className="block text-[11px] font-normal text-slate-400">کار بدون روز مشخص؛ بعداً با یک کلیک زمان‌بندی‌اش کن</span>
+        </span>
+      </label>
+      <div>
+        <span className="mb-1.5 block text-xs font-bold text-slate-600 dark:text-slate-300">زیروظایف</span>
+        <div className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/60 p-3 dark:border-white/5 dark:bg-white/[0.02]">
+          {subs.map((s) => (
+            <div key={s.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSubs((p) => p.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)))}
+                className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition', s.done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white dark:border-white/20 dark:bg-transparent')}
+              >
+                {s.done && <Check size={14} />}
+              </button>
+              <input
+                value={s.title}
+                onChange={(e) => setSubs((p) => p.map((x) => (x.id === s.id ? { ...x, title: e.target.value } : x)))}
+                className={cx(inputCls, 'h-9', s.done && 'line-through opacity-60')}
+                placeholder="عنوان زیروظیفه"
+              />
+              <button type="button" onClick={() => setSubs((p) => p.filter((x) => x.id !== s.id))} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 hover:bg-rose-500/10 hover:text-rose-500">
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <input
+              value={newSub}
+              onChange={(e) => setNewSub(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newSub.trim()) {
+                  e.preventDefault();
+                  setSubs((p) => [...p, { id: uid('st'), title: newSub.trim(), done: false }]);
+                  setNewSub('');
+                }
+              }}
+              className={inputCls}
+              placeholder="زیروظیفه جدید + Enter"
+            />
+            <Btn variant="soft" onClick={() => { if (newSub.trim()) { setSubs((p) => [...p, { id: uid('st'), title: newSub.trim(), done: false }]); setNewSub(''); } }}>
+              <Plus size={15} />
+            </Btn>
+          </div>
         </div>
       </div>
-    </Modal>
+      {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
+      <div className="flex justify-end gap-2">
+      <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
+      <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'افزودن وظیفه'}</Btn>
+      </div>
+    </div>
   );
 }
 
 // ── مودال رویداد ────────────────────────────────────────────
-export function EventModal({ open, onClose, edit, presetDay }: { open: boolean; onClose: () => void; edit?: CalEvent | null; presetDay?: number | null }) {
-  const { addEvent, updateEvent } = useApp();
-  const [title, setTitle] = useState('');
-  const [day, setDay] = useState<number | null>(null);
-  const [time, setTime] = useState('');
-  const [color, setColor] = useState(EVENT_COLORS[0]);
-  const [desc, setDesc] = useState('');
-  const [err, setErr] = useState('');
+interface EventModalProps {
+  open: boolean;
+  onClose: () => void;
+  edit?: CalEvent | null;
+  presetDay?: number | null;
+}
 
-  useEffect(() => {
-    if (open) {
-      setTitle(edit?.title ?? '');
-      setDay(edit?.day ?? presetDay ?? todayStart());
-      setTime(edit?.time ?? '');
-      setColor(edit?.color ?? EVENT_COLORS[Math.floor(Math.random() * EVENT_COLORS.length)]);
-      setDesc(edit?.desc ?? '');
-      setErr('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const save = () => {
-    if (!title.trim()) { setErr('عنوان رویداد را بنویسید'); return; }
-    if (day == null) { setErr('روز رویداد را انتخاب کنید'); return; }
-    const timeNorm = time.trim() ? (normalizeClockText(time) ?? '') : '';
-    if (time.trim() && !timeNorm) { setErr('ساعت را ۲۴ساعته و به شکل ۱۰:۰۰ یا ۱۸:۳۰ بنویسید'); return; }
-    if (edit) updateEvent(edit.id, { title: title.trim(), day, time: timeNorm, color, desc: desc.trim() || undefined });
-    else addEvent({ title: title.trim(), day, time: timeNorm, color, desc: desc.trim() || undefined });
-    onClose();
-  };
-
+export function EventModal(props: EventModalProps) {
+  const { open, edit } = props;
   return (
-    <Modal open={open} onClose={onClose} title={edit ? 'ویرایش رویداد' : 'رویداد جدید'}>
-      <div className="space-y-4">
-        <Field label="عنوان رویداد">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="مثلاً جلسه تیم طراحی" />
-        </Field>
-        <Field label="روز">
-          <JalaliDateField value={day} onChange={setDay} allowClear={false} />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="ساعت (اختیاری — ۲۴ساعته)">
-            <TimeField value={time} onChange={setTime} ariaLabel="ساعت رویداد" placeholder="۱۸:۳۰" />
-          </Field>
-          <Field label="یادداشت">
-            <input value={desc} onChange={(e) => setDesc(e.target.value)} className={inputCls} placeholder="مکان یا توضیح…" />
-          </Field>
-        </div>
-        <Field label="رنگ">
-          <ColorDots colors={EVENT_COLORS} value={color} onChange={setColor} />
-        </Field>
-        {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
-        <div className="flex justify-end gap-2">
-          <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
-          <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'افزودن رویداد'}</Btn>
-        </div>
-      </div>
+    <Modal open={open} onClose={props.onClose} title={edit ? 'ویرایش رویداد' : 'رویداد جدید'}>
+      {open && <EventForm {...props} />}
     </Modal>
   );
 }
 
-// ── مودال عادت ──────────────────────────────────────────────
-export function HabitModal({ open, onClose, edit }: { open: boolean; onClose: () => void; edit?: Habit | null }) {
-  const { addHabit, updateHabit } = useApp();
-  const [title, setTitle] = useState('');
-  const [color, setColor] = useState(HABIT_COLORS[0]);
-  const [target, setTarget] = useState(5);
+/** فرم رویداد — با هر باز شدن از نو ساخته می‌شود */
+function EventForm({ onClose, edit, presetDay }: Omit<EventModalProps, 'open'>) {
+  const { addEvent, updateEvent } = useApp();
+  const [title, setTitle] = useState(edit?.title ?? '');
+  const [day, setDay] = useState<number | null>(edit?.day ?? presetDay ?? todayStart());
+  const [time, setTime] = useState(edit?.time ?? '');
+  const [color, setColor] = useState(edit?.color ?? EVENT_COLORS[0]);
+  const [desc, setDesc] = useState(edit?.desc ?? '');
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    if (open) {
-      setTitle(edit?.title ?? '');
-      setColor(edit?.color ?? HABIT_COLORS[0]);
-      setTarget(edit?.targetPerWeek ?? 5);
-      setErr('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  const save = () => {
+    if (!title.trim()) { setErr('عنوان رویداد را بنویسید'); return; }
+    if (day == null) { setErr('روز رویداد را انتخاب کنید'); return; }
+    const t = time ? normalizeClock(time) : '';
+    if (time && !t) { setErr('ساعت معتبر نیست (قالب ۲۴ ساعته مثل ۱۴:۳۰)'); return; }
+    if (edit) updateEvent(edit.id, { title: title.trim(), day, time: t ?? '', color, desc: desc.trim() || undefined });
+    else addEvent({ title: title.trim(), day, time: t ?? '', color, desc: desc.trim() || undefined });
+    onClose();
+  };
+
+  return (
+    <div className="space-y-4">
+      <Field label="عنوان رویداد">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="مثلاً جلسه تیم طراحی" />
+      </Field>
+      <Field label="روز">
+        <JalaliDateField value={day} onChange={setDay} allowClear={false} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="ساعت (۲۴ ساعته — اختیاری)">
+          <TimeField value={time} onChange={setTime} placeholder="۱۰:۰۰" />
+        </Field>
+        <Field label="یادداشت">
+          <input value={desc} onChange={(e) => setDesc(e.target.value)} className={inputCls} placeholder="مکان یا توضیح…" />
+        </Field>
+      </div>
+      <Field label="رنگ">
+        <ColorDots colors={EVENT_COLORS} value={color} onChange={setColor} />
+      </Field>
+      {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
+      <div className="flex justify-end gap-2">
+      <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
+      <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'افزودن رویداد'}</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── مودال عادت ──────────────────────────────────────────────
+interface HabitModalProps {
+  open: boolean;
+  onClose: () => void;
+  edit?: Habit | null;
+}
+
+export function HabitModal(props: HabitModalProps) {
+  const { open, edit } = props;
+  return (
+    <Modal open={open} onClose={props.onClose} title={edit ? 'ویرایش عادت' : 'عادت جدید'} sub="کوچک شروع کن، مداوم ادامه بده">
+      {open && <HabitForm {...props} />}
+    </Modal>
+  );
+}
+
+/** فرم عادت — با هر باز شدن از نو ساخته می‌شود */
+function HabitForm({ onClose, edit }: Omit<HabitModalProps, 'open'>) {
+  const { addHabit, updateHabit } = useApp();
+  const [title, setTitle] = useState(edit?.title ?? '');
+  const [color, setColor] = useState(edit?.color ?? HABIT_COLORS[0]);
+  const [target, setTarget] = useState(edit?.targetPerWeek ?? 5);
+  const [err, setErr] = useState('');
 
   const save = () => {
     if (!title.trim()) { setErr('نام عادت را بنویسید'); return; }
@@ -458,63 +679,64 @@ export function HabitModal({ open, onClose, edit }: { open: boolean; onClose: ()
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={edit ? 'ویرایش عادت' : 'عادت جدید'} sub="کوچک شروع کن، مداوم ادامه بده">
-      <div className="space-y-4">
-        <Field label="نام عادت">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="مثلاً ۲۰ دقیقه مطالعه" />
-        </Field>
-        <Field label="رنگ">
-          <ColorDots colors={HABIT_COLORS} value={color} onChange={setColor} />
-        </Field>
-        <Field label="هدف هفتگی (روز در هفته)">
-          <div className="flex items-center gap-3">
-            <div className="flex flex-1 gap-1.5">
-              {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setTarget(n)}
-                  className={cx(
-                    'tabular grid h-10 flex-1 place-items-center rounded-xl text-sm font-black transition',
-                    target === n ? 'text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300',
-                  )}
-                  style={target === n ? { background: color } : undefined}
-                >
-                  {toFa(n)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </Field>
-        {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
-        <div className="flex justify-end gap-2">
-          <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
-          <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'افزودن عادت'}</Btn>
+    <div className="space-y-4">
+      <Field label="نام عادت">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="مثلاً ۲۰ دقیقه مطالعه" />
+      </Field>
+      <Field label="رنگ">
+        <ColorDots colors={HABIT_COLORS} value={color} onChange={setColor} />
+      </Field>
+      <Field label="هدف هفتگی (روز در هفته)">
+        <div className="flex gap-1.5">
+          {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setTarget(n)}
+              className={cx(
+                'tabular grid h-10 flex-1 place-items-center rounded-xl text-sm font-black transition',
+                target === n ? 'text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300',
+              )}
+              style={target === n ? { background: color } : undefined}
+            >
+              {toFa(n)}
+            </button>
+          ))}
         </div>
+      </Field>
+      {err && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-300">{err}</p>}
+      <div className="flex justify-end gap-2">
+      <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
+      <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'افزودن عادت'}</Btn>
       </div>
-    </Modal>
+    </div>
   );
 }
 
 // ── مودال یادداشت ───────────────────────────────────────────
-export function NoteModal({ open, onClose, edit }: { open: boolean; onClose: () => void; edit?: Note | null }) {
-  const { addNote, updateNote } = useApp();
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [color, setColor] = useState(NOTE_COLORS[0]);
-  const [tagsTxt, setTagsTxt] = useState('');
-  const [pinned, setPinned] = useState(false);
+interface NoteModalProps {
+  open: boolean;
+  onClose: () => void;
+  edit?: Note | null;
+}
 
-  useEffect(() => {
-    if (open) {
-      setTitle(edit?.title ?? '');
-      setBody(edit?.body ?? '');
-      setColor(edit?.color ?? NOTE_COLORS[0]);
-      setTagsTxt(edit?.tags.join('، ') ?? '');
-      setPinned(edit?.pinned ?? false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+export function NoteModal(props: NoteModalProps) {
+  const { open, edit } = props;
+  return (
+    <Modal open={open} onClose={props.onClose} title={edit ? 'ویرایش یادداشت' : 'یادداشت جدید'} wide>
+      {open && <NoteForm {...props} />}
+    </Modal>
+  );
+}
+
+/** فرم یادداشت — با هر باز شدن از نو ساخته می‌شود */
+function NoteForm({ onClose, edit }: Omit<NoteModalProps, 'open'>) {
+  const { addNote, updateNote } = useApp();
+  const [title, setTitle] = useState(edit?.title ?? '');
+  const [body, setBody] = useState(edit?.body ?? '');
+  const [color, setColor] = useState(edit?.color ?? NOTE_COLORS[0]);
+  const [tagsTxt, setTagsTxt] = useState(edit?.tags.join('، ') ?? '');
+  const [pinned, setPinned] = useState(edit?.pinned ?? false);
 
   const save = () => {
     if (!title.trim() && !body.trim()) { onClose(); return; }
@@ -525,41 +747,40 @@ export function NoteModal({ open, onClose, edit }: { open: boolean; onClose: () 
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={edit ? 'ویرایش یادداشت' : 'یادداشت جدید'} wide>
-      <div className="space-y-4">
-        <Field label="عنوان">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="عنوان یادداشت…" />
+    <div className="space-y-4">
+      <Field label="عنوان">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="عنوان یادداشت…" />
+      </Field>
+      <Field label="متن">
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={7} className={cx(inputCls, 'h-auto py-3 leading-7')} placeholder="هرچه در ذهن داری بنویس…" />
+      </Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="برچسب‌ها">
+          <input value={tagsTxt} onChange={(e) => setTagsTxt(e.target.value)} className={inputCls} placeholder="ایده، کاری" />
         </Field>
-        <Field label="متن">
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={7} className={cx(inputCls, 'h-auto py-3 leading-7')} placeholder="هرچه در ذهن داری بنویس…" />
+        <Field label="رنگ">
+          <div className="flex flex-wrap gap-2">
+            {NOTE_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-label={`رنگ ${c}`}
+                onClick={() => setColor(c)}
+                className={cx('h-9 w-9 rounded-full border transition-all', color === c ? 'scale-110 border-slate-500 ring-2 ring-slate-300' : 'border-slate-200 hover:scale-105')}
+                style={{ background: c }}
+              />
+            ))}
+          </div>
         </Field>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="برچسب‌ها">
-            <input value={tagsTxt} onChange={(e) => setTagsTxt(e.target.value)} className={inputCls} placeholder="ایده، کاری" />
-          </Field>
-          <Field label="رنگ">
-            <div className="flex flex-wrap gap-2">
-              {NOTE_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={cx('h-9 w-9 rounded-full border transition-all', color === c ? 'scale-110 border-slate-500 ring-2 ring-slate-300' : 'border-slate-200 hover:scale-105')}
-                  style={{ background: c }}
-                />
-              ))}
-            </div>
-          </Field>
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-          <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="h-4 w-4 accent-emerald-600" />
-          سنجاق شود (بالای لیست بماند)
-        </label>
-        <div className="flex justify-end gap-2">
-          <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
-          <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'ذخیره یادداشت'}</Btn>
-        </div>
       </div>
-    </Modal>
+      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+        <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="h-4 w-4 accent-emerald-600" />
+        سنجاق شود (بالای لیست بماند)
+      </label>
+      <div className="flex justify-end gap-2">
+      <Btn variant="ghost" onClick={onClose}>انصراف</Btn>
+      <Btn onClick={save}>{edit ? 'ذخیره تغییرات' : 'ذخیره یادداشت'}</Btn>
+      </div>
+    </div>
   );
 }

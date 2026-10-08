@@ -1,26 +1,25 @@
-import { Suspense, lazy, useCallback, useState } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppProvider } from './lib/store';
-import { Shell } from './components/Shell';
+import { Shell, type QuickKind } from './components/Shell';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { TaskModal, EventModal, HabitModal, NoteModal } from './components/forms';
-import type { QuickKind } from './components/Shell';
+import { EventModal, HabitModal, NoteModal, TaskModal } from './components/forms';
 
 // لود تنبل صفحات: باندل اولیه سبک‌تر و شروع سریع‌تر برنامه
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Today = lazy(() => import('./pages/Today'));
-const Backlog = lazy(() => import('./pages/Backlog'));
 const Tasks = lazy(() => import('./pages/Tasks'));
 const Calendar = lazy(() => import('./pages/Calendar'));
+const Insights = lazy(() => import('./pages/Insights'));
+const Backlog = lazy(() => import('./pages/Backlog'));
 const Habits = lazy(() => import('./pages/Habits'));
 const Notes = lazy(() => import('./pages/Notes'));
-const Insights = lazy(() => import('./pages/Insights'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 function PageLoader() {
   return (
-    <div className="space-y-3" aria-label="در حال بارگذاری…">
+    <div className="space-y-3" aria-label="در حال بارگذاری…" role="status">
       <div className="shimmer-line h-32 rounded-3xl" />
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <div className="shimmer-line h-24 rounded-2xl" />
@@ -33,6 +32,15 @@ function PageLoader() {
   );
 }
 
+/** با هر تغییر مسیر، اسکرول به بالای صفحه برگردد (تجربه موبایل بهتر) */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [pathname]);
+  return null;
+}
+
 function Root() {
   const [quick, setQuick] = useState<QuickKind | null>(null);
   const open = useCallback((k: QuickKind) => setQuick(k), []);
@@ -40,17 +48,18 @@ function Root() {
 
   return (
     <Shell onQuickAdd={open}>
+      <ScrollToTop />
       <ErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Dashboard onQuickAdd={open} />} />
             <Route path="/today" element={<Today />} />
-            <Route path="/backlog" element={<Backlog />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/calendar" element={<Calendar />} />
+            <Route path="/insights" element={<Insights />} />
+            <Route path="/backlog" element={<Backlog />} />
             <Route path="/habits" element={<Habits />} />
             <Route path="/notes" element={<Notes />} />
-            <Route path="/insights" element={<Insights />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />

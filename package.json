@@ -1,13 +1,15 @@
 {
-  "name": "mizkar-zendegi",
+  "name": "life-desk",
   "private": true,
-  "version": "3.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke": "esbuild scripts/smoke.ts --bundle --platform=node --format=cjs --jsx=automatic --outfile=node_modules/.cache/smoke.cjs --log-level=warning && node node_modules/.cache/smoke.cjs",
+    "verify": "npm run lint && npm run build && npm run smoke"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",
@@ -32,5 +34,5 @@
     "typescript-eslint": "^8.48.0",
     "vite": "^7.3.1"
   },
-  "description": "میزکار زندگی — وب‌اپ شخصی فارسی، کاملاً آفلاین: وظایف، تقویم شمسی، عادت‌ها، یادداشت‌ها و نمره‌گذاری روزانه"
+  "description": "میزکار زندگی — وب‌اپ شخصی فارسی برای وظایف، تقویم شمسی، عادت‌ها، یادداشت‌ها و تحلیل نمره روزها"
 }

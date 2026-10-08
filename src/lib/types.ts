@@ -4,9 +4,9 @@ export type ViewKey =
   | 'backlog'
   | 'tasks'
   | 'calendar'
+  | 'insights'
   | 'habits'
   | 'notes'
-  | 'insights'
   | 'reports'
   | 'settings';
 
@@ -27,7 +27,7 @@ export interface Task {
   priority: TaskPriority;
   tags: string[];
   due: number | null; // startOfDay timestamp
-  /** ساعت شروع «HH:MM» ۲۴ساعته برای تسک‌های زمان‌دار (تایم‌لاین روز) */
+  /** ساعت شروع «HH:MM» (۲۴ ساعته) برای تسک‌های زمان‌دار (تایم‌لاین روز) */
   time?: string;
   /** مدت دقیقه‌ای (پیش‌فرض ۶۰) برای تایم‌لاین */
   durationMin?: number;
@@ -50,7 +50,7 @@ export interface CalEvent {
   id: string;
   title: string;
   day: number; // startOfDay timestamp
-  time: string; // «HH:MM» ۲۴ساعته یا ''
+  time: string; // «HH:MM» ۲۴ ساعته یا ''
   color: string;
   desc?: string;
   createdAt: number;
@@ -82,13 +82,13 @@ export interface DayReflection {
   day: number; // startOfDay timestamp
   mood: 1 | 2 | 3 | 4 | 5;
   /**
-   * نمره روز از ۰ تا ۱۰ با یک رقم اعشار (مثلاً ۷٫۵).
-   * `null` یا `undefined` یعنی ثبت نشده است.
+   * نمره روز از ۰ تا ۱۰ با دقت یک رقم اعشار (مثل ۷٫۵ یا ۸)
+   * `null` یعنی ثبت نشده است.
    */
   score?: number | null;
-  /** اطلاعات پایه روز */
-  wake?: string; // «HH:MM» ۲۴ساعته
-  sleep?: string; // «HH:MM» ۲۴ساعته
+  /** اطلاعات پایه روز — ساعت‌ها همیشه «HH:MM» و ۲۴ ساعته‌اند */
+  wake?: string;
+  sleep?: string;
   sport?: boolean;
   sportType?: string;
   wentOut?: boolean;
@@ -142,10 +142,10 @@ export interface AppState {
 }
 
 // ── ثابت‌ها ─────────────────────────────────────────────────
+/** گام نمره روز: یک‌دهم */
+export const SCORE_STEP = 0.1;
 export const SCORE_MIN = 0;
 export const SCORE_MAX = 10;
-/** دقت نمره روز: یک رقم اعشار */
-export const SCORE_STEP = 0.1;
 
 export const EVENT_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316'];
 export const NOTE_COLORS = ['#fef3c7', '#dcfce7', '#dbeafe', '#fae8ff', '#ffe4e6', '#ffedd5'];
@@ -171,26 +171,3 @@ export const PRIORITY_META: Record<TaskPriority, { label: string; color: string;
   medium: { label: 'متوسط', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
   low: { label: 'عادی', color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-500/10 border-sky-500/30' },
 };
-
-/** نام و ایموجی حال‌های روزانه — مشترک بین صفحه روز جاری، داشبورد و گزارش‌ها */
-export const MOODS: ReadonlyArray<{ v: 1 | 2 | 3 | 4 | 5; e: string; l: string }> = [
-  { v: 1, e: '😞', l: 'بد' },
-  { v: 2, e: '😐', l: 'معمولی' },
-  { v: 3, e: '🙂', l: 'خوب' },
-  { v: 4, e: '😄', l: 'عالی' },
-  { v: 5, e: '🤩', l: 'فوق‌العاده' },
-];
-
-export function moodFace(m: number | null | undefined): string {
-  if (m == null) return '—';
-  if (m <= 1) return '😞';
-  if (m === 2) return '😐';
-  if (m === 3) return '🙂';
-  if (m === 4) return '😄';
-  return '🤩';
-}
-
-export function moodLabel(m: number | null | undefined): string {
-  if (m == null) return 'ثبت نشده';
-  return MOODS.find((x) => x.v === m)?.l ?? 'ثبت نشده';
-}

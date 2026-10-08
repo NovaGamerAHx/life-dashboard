@@ -24,8 +24,11 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'warn',
       // Date.now() در رندر برای نمایش زمان نسبی بی‌خطر است
       'react-hooks/purity': 'warn',
-      // خروجی‌گرفتن ثابت‌ها کنار کامپوننت فقط روی HMR اثر دارد، نه صحت برنامه
-      'react-refresh/only-export-components': 'warn',
+      // خروجی‌گرفتن ثابت‌ها/هوک‌ها کنار کامپوننت فقط روی HMR اثر دارد، نه صحت برنامه
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true, allowExportNames: ['useApp', 'smartDueFull', 'NAV', 'MOBILE_NAV', 'TITLES'] },
+      ],
     },
   },
 ])

@@ -1,166 +1,108 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  BarChart3, CalendarRange, CheckCheck, ChevronLeft, ChevronRight, ClipboardCopy,
-  Copy, Download, Dices, Eraser, FileText, Info, LineChart as LineIcon, ListChecks,
-  MousePointerClick, Sparkles, Star, Target, Wand2,
+  Activity, Award, BedDouble, CalendarRange, Check, ChevronLeft, ChevronRight,
+  Copy, Dices, Download, Eye, FileSpreadsheet, FileText, Flame, Footprints, Gauge,
+  Info, ListChecks, RefreshCw, Shuffle, Smile, Sparkles, Star, Target,
+  TrendingDown, TrendingUp, X,
 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../lib/store';
 import {
-  addDays, addMonthsJalali, clockToFa, formatJalali, formatJalaliShort, formatScore,
-  getMonthGrid, J_MONTHS, J_WEEKDAYS, J_WEEKDAYS_SHORT, jalaliMonthRange, rangeLabel,
-  startOfDay, startOfWeek, toFa, toGregorian, toJalaali, todayStart, weekdayName,
+  addDays, addMonthsJalali, formatClock24, formatJalali, formatJalaliShort, formatScore,
+  getMonthGrid, J_MONTHS, J_WEEKDAYS_SHORT, toFa, toJalaali, todayStart,
 } from '../lib/jalali';
 import {
-  avg, buildDayStats, downloadText, exportRowsCsv, extremes, lastNDaysRange, median,
-  previousRange, rangeDays, reflectionMap, scoreHistogram, sleepDurationMin,
-  thisMonthRange, thisWeekRange, weekdayAverages, type DayStats, type Range as DRange,
-} from '../lib/stats';
+  buildDayStats, dayListBetween, formatDurationFa, monthBuckets, moodDistribution,
+  pickRandom, resolveRange, rollupDays, scoreDistribution, scoreStats, trendDelta,
+  weekBuckets, type DayStat, type RangePreset,
+} from '../lib/days';
 import {
-  buildMultiDaySummary, DEFAULT_SUMMARY_OPTIONS, missingFields, NOT_RECORDED,
-  type MultiSummaryOptions,
+  DEFAULT_SUMMARY_OPTIONS, buildDayBlock, buildSummaryCsv, buildSummaryText,
+  type SummaryOptions,
 } from '../lib/summary';
-import { moodFace, moodLabel, SCORE_MAX } from '../lib/types';
 import {
-  Badge, Btn, Card, CardHead, CheckPill, Empty, Progress, ScorePill, Segmented,
-} from '../components/ui';
-import { cx, copyToClipboard, sampleRandom } from '../lib/utils';
-
-// ── انواع بازه ───────────────────────────────────────────────
-type RangePreset = 'thisWeek' | 'lastWeek' | 'd7' | 'd30' | 'thisMonth' | 'lastMonth' | 'd90' | 'd365' | 'custom';
+  EMPTY, EMPTY_LABEL, SCORE_LEGEND, moodFace, moodLabel, orEmpty, scoreGrade, scoreHeatClass,
+} from '../lib/display';
+import { buildLifeInsights, daysSinceLastScore, goodStreak } from '../lib/insights';
+import { copyText, downloadText } from '../lib/stats';
+import { jalaliStamp } from '../lib/backup';
+import { Card, CardHead, Btn, Badge, Segmented, Empty, Chip, Modal, inputCls, CheckIcon } from '../components/ui';
+import { Bars, ScoreTrend } from '../components/charts';
+import { JalaliDateField } from '../components/forms';
+import { cx } from '../lib/utils';
 
 const PRESETS: Array<{ v: RangePreset; label: string }> = [
-  { v: 'thisWeek', label: 'این هفته' },
-  { v: 'lastWeek', label: 'هفته گذشته' },
-  { v: 'd7', label: '۷ روز اخیر' },
-  { v: 'd30', label: '۳۰ روز اخیر' },
+  { v: '7d', label: '۷ روز' },
+  { v: '14d', label: '۱۴ روز' },
+  { v: '30d', label: '۳۰ روز' },
+  { v: '90d', label: '۹۰ روز' },
   { v: 'thisMonth', label: 'این ماه' },
   { v: 'lastMonth', label: 'ماه گذشته' },
-  { v: 'd90', label: '۹۰ روز اخیر' },
-  { v: 'd365', label: 'یک سال اخیر' },
   { v: 'custom', label: 'بازه دلخواه' },
 ];
 
-type SortKey = 'asc' | 'desc' | 'scoreDesc' | 'scoreAsc' | 'selected';
 
-interface FieldFlags {
-  score: boolean;
-  mood: boolean;
-  basics: boolean;
-  progress: boolean;
-  dayNote: boolean;
-  wins: boolean;
-  improve: boolean;
-  lessons: boolean;
-  gratitude: boolean;
-}
-
-const FIELD_LABELS: Array<{ k: keyof FieldFlags; label: string }> = [
-  { k: 'score', label: '⭐ نمره روز' },
-  { k: 'mood', label: '😊 حال روز' },
-  { k: 'progress', label: '✅ تسک‌ها و عادت‌ها' },
-  { k: 'basics', label: '😴 خواب و ورزش و بیرون' },
-  { k: 'dayNote', label: '📝 یادداشت روز' },
-  { k: 'wins', label: '🏆 دستاوردها' },
-  { k: 'improve', label: '🔧 قابل بهبود' },
-  { k: 'lessons', label: '💡 درس آموخته‌شده' },
-  { k: 'gratitude', label: '🙏 قدردانی' },
-];
 
 export default function Insights() {
   const { state } = useApp();
-  const [params, setParams] = useSearchParams();
   const weekStart = state.settings.weekStart;
   const today = todayStart();
 
-  // ── بازه زمانی ────────────────────────────────────────────
-  const [preset, setPreset] = useState<RangePreset>('d30');
-  const [custom, setCustom] = useState<DRange>(() => lastNDaysRange(30));
-  const range = useMemo<DRange>(() => {
-    switch (preset) {
-      case 'thisWeek': return thisWeekRange(today, weekStart);
-      case 'lastWeek': {
-        const w = thisWeekRange(today, weekStart);
-        return { start: addDays(w.start, -7), end: addDays(w.end, -7) };
-      }
-      case 'd7': return lastNDaysRange(7, today);
-      case 'thisMonth': return thisMonthRange(today);
-      case 'lastMonth': {
-        const j = toJalaali(new Date(today));
-        const p = addMonthsJalali(j.jy, j.jm, -1);
-        return monthRangeOf(p.jy, p.jm);
-      }
-      case 'd90': return lastNDaysRange(90, today);
-      case 'd365': return lastNDaysRange(365, today);
-      case 'custom': return custom;
-      case 'd30':
-      default: return lastNDaysRange(30, today);
-    }
-  }, [preset, today, weekStart, custom]);
+  const [preset, setPreset] = useState<RangePreset>('30d');
+  const [customFrom, setCustomFrom] = useState<number>(addDays(today, -13));
+  const [customTo, setCustomTo] = useState<number>(today);
 
-  const days = useMemo(() => rangeDays(range), [range]);
-  const stats = useMemo(() => buildDayStats(days, state), [days, state]);
-  const refMap = useMemo(() => reflectionMap(state.reflections), [state.reflections]);
-
-  // مقایسه با بازه هم‌طول قبلی
-  const prevRange = useMemo(() => previousRange(range), [range]);
-  const prevStats = useMemo(() => buildDayStats(rangeDays(prevRange), state), [prevRange, state]);
-
-  const scored = useMemo(
-    () => stats.filter((d): d is DayStats & { score: number } => d.score != null),
-    [stats],
+  const range = useMemo(
+    () => resolveRange(preset, customFrom, customTo),
+    [preset, customFrom, customTo],
   );
-  const scores = useMemo(() => scored.map((d) => d.score), [scored]);
-  const avgScore = avg(scores);
-  const medScore = median(scores);
-  const prevScores = prevStats.map((d) => d.score).filter((s): s is number => s != null);
-  const prevAvg = avg(prevScores);
-  const delta = avgScore != null && prevAvg != null ? Math.round((avgScore - prevAvg) * 10) / 10 : null;
-  const scoredDaysPct = days.length ? Math.round((scored.length / days.length) * 100) : 0;
-  const { best, worst } = extremes(stats.map((d) => ({ day: d.day, value: d.score })));
-  const moodAvg = avg(stats.map((d) => d.mood).filter((m): m is number => m != null));
-  const habitRate = useMemo(() => {
-    const total = stats.reduce((a, d) => a + d.habitsTotal, 0);
-    const done = stats.reduce((a, d) => a + d.habitsDone, 0);
-    return total ? Math.round((done / total) * 100) : 0;
-  }, [stats]);
-  const taskRate = useMemo(() => {
-    const withTasks = stats.filter((d) => d.total > 0);
-    if (!withTasks.length) return null;
-    return Math.round(avg(withTasks.map((d) => d.pct)) ?? 0);
-  }, [stats]);
-  // هیستوگرام نمره‌ها (محاسبه سبک؛ نیازی به memo ندارد)
-  const hist = scoreHistogram(scores, 1);
-  const weekdayAvg = useMemo(
-    () => weekdayAverages(stats, (ts) => (new Date(ts).getDay() + 1) % 7),
-    [stats],
-  );
+  const stats = useMemo(() => buildDayStats(state, range.days), [state, range.days]);
 
-  // ── انتخاب روزها ──────────────────────────────────────────
+  // بازه قبلی با همان طول برای مقایسه
+  const prevStats = useMemo(() => {
+    const len = range.days.length;
+    if (len === 0) return [];
+    return buildDayStats(state, dayListBetween(addDays(range.from, -len), addDays(range.from, -1)));
+  }, [state, range.from, range.days.length]);
+
+  const s = useMemo(() => scoreStats(stats), [stats]);
+  const prevS = useMemo(() => scoreStats(prevStats), [prevStats]);
+  const roll = useMemo(() => rollupDays(stats), [stats]);
+  const prevRoll = useMemo(() => rollupDays(prevStats), [prevStats]);
+  const trend = useMemo(() => trendDelta(stats), [stats]);
+  const dist = useMemo(() => scoreDistribution(stats), [stats]);
+  const moods = useMemo(() => moodDistribution(stats), [stats]);
+  const weeks = useMemo(() => weekBuckets(stats, weekStart), [stats, weekStart]);
+  const months = useMemo(() => monthBuckets(stats), [stats]);
+  const streakDays = useMemo(() => goodStreak(stats, 8), [stats]);
+  const sinceLast = useMemo(() => daysSinceLastScore(stats), [stats]);
+
+  // ── وضعیت انتخاب روزها برای خروجی ────────────────────────
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const [opts, setOpts] = useState<SummaryOptions>(DEFAULT_SUMMARY_OPTIONS);
   const [randomN, setRandomN] = useState(10);
   const [randomOnlyScored, setRandomOnlyScored] = useState(true);
+  const [flash, setFlash] = useState<string | null>(null);
+  const [detailDay, setDetailDay] = useState<number | null>(null);
+  const [calJ, setCalJ] = useState(() => {
+    const j = toJalaali(new Date());
+    return { jy: j.jy, jm: j.jm };
+  });
 
-  // اگر بازه عوض شد، انتخاب‌های خارج بازه پاک شوند
-  useEffect(() => {
-    setSelected((prev) => {
-      const next = new Set([...prev].filter((d) => d >= range.start && d <= range.end));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [range.start, range.end]);
+  const inRangeSelected = useMemo(() => stats.filter((d) => selected.has(d.day)), [stats, selected]);
 
-  // میان‌بر از جست‌وجوی سراسری: ?day=…
-  const dayParam = params.get('day');
-  useEffect(() => {
-    const n = dayParam != null ? Number(dayParam) : NaN;
-    if (!Number.isFinite(n) || n <= 0) return;
-    const ts = startOfDay(n);
-    setPreset('custom');
-    setCustom({ start: addDays(ts, -14), end: addDays(ts, 14) });
-    setSelected(new Set([ts]));
-    setParams({}, { replace: true });
-  }, [dayParam, setParams]);
+  const statByDay = useMemo(() => {
+    const m = new Map<number, DayStat>();
+    for (const d of stats) m.set(d.day, d);
+    return m;
+  }, [stats]);
+
+  const detail = detailDay != null ? statByDay.get(detailDay) ?? null : null;
+
+  const notify = (msg: string) => {
+    setFlash(msg);
+    window.setTimeout(() => setFlash(null), 2200);
+  };
 
   const toggleDay = (day: number) =>
     setSelected((prev) => {
@@ -170,1064 +112,958 @@ export default function Insights() {
       return next;
     });
 
-  const selectScoredInRange = () => setSelected(new Set(scored.map((d) => d.day)));
-  const selectAllInRange = () => setSelected(new Set(days));
-  const clearSelection = () => setSelected(new Set());
-  const pickRandom = () => {
-    const pool = (randomOnlyScored ? scored.map((d) => d.day) : days);
-    setSelected(new Set(sampleRandom(pool, randomN)));
-  };
+  const selectMany = (days: number[]) => setSelected(new Set(days));
 
-  const selectedDays = useMemo(() => [...selected].sort((a, b) => a - b), [selected]);
-  const selectedStats = useMemo(
-    () => selectedDays.map((d) => stats.find((s) => s.day === d)).filter((x): x is DayStats => !!x),
-    [selectedDays, stats],
+  const outputText = useMemo(
+    () =>
+      buildSummaryText(inRangeSelected, opts, {
+        label: range.label,
+        from: range.from,
+        to: range.to,
+        count: inRangeSelected.length,
+      }),
+    [inRangeSelected, opts, range],
   );
-  const selectedScores = selectedStats.map((d) => d.score).filter((s): s is number => s != null);
-  const selectedAvg = avg(selectedScores);
-
-  // ── خروجی متنی ────────────────────────────────────────────
-  const [fields, setFields] = useState<FieldFlags>({
-    score: true, mood: true, basics: true, progress: true, dayNote: true, wins: true, improve: true, lessons: true, gratitude: true,
-  });
-  const [source, setSource] = useState<'selected' | 'rangeScored' | 'rangeAll' | 'weeks' | 'months'>('selected');
-  const [style, setStyle] = useState<'plain' | 'markdown' | 'csv'>('plain');
-  const [sort, setSort] = useState<SortKey>('asc');
-  const [copied, setCopied] = useState(false);
-  const [includeGroupHeader, setIncludeGroupHeader] = useState(true);
-
-  const summaryOptions: MultiSummaryOptions = useMemo(() => ({
-    ...DEFAULT_SUMMARY_OPTIONS,
-    includeScore: fields.score,
-    mood: fields.mood,
-    basics: fields.basics,
-    progress: fields.progress,
-    dayNote: fields.dayNote,
-    wins: fields.wins,
-    improve: fields.improve,
-    lessons: fields.lessons,
-    gratitude: fields.gratitude,
-    style: style === 'markdown' ? 'markdown' : 'plain',
-    header: true,
-    groupHeader: includeGroupHeader,
-    sort: sort === 'selected' ? 'asc' : sort,
-  }), [fields, style, sort, includeGroupHeader]);
-
-  const outputText = useMemo(() => {
-    if (style === 'csv') return buildCsvText(source, days, stats, fields, state.settings.weekStart);
-    if (source === 'weeks') return buildWeeksSummary(days, state, summaryOptions);
-    if (source === 'months') return buildMonthsSummary(days, state, summaryOptions);
-    // روزهای خروجی بر اساس منبع انتخاب‌شده
-    const outputDays = computeOutputDays(source, selectedDays, scored, days);
-    if (outputDays.length === 0) return '';
-    return buildMultiDaySummary(outputDays, {
-      reflections: state.reflections,
-      tasks: state.tasks,
-      habits: state.habits,
-      habitLogs: state.habitLogs,
-    }, {
-      ...summaryOptions,
-      title: source === 'selected' ? `خلاصه ${toFa(outputDays.length)} روز انتخاب‌شده` : `خلاصه روزهای بازه (${toFa(outputDays.length)} روز)`,
-    });
-  }, [source, days, stats, fields, summaryOptions, style, state, selectedDays, scored]);
 
   const copyOutput = async () => {
-    if (!outputText) return;
-    const ok = await copyToClipboard(outputText);
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    }
+    if (inRangeSelected.length === 0) { notify('اول چند روز را انتخاب کنید'); return; }
+    const ok = await copyText(outputText);
+    notify(ok ? `متن ${toFa(inRangeSelected.length)} روز کپی شد ✅` : 'کپی نشد — متن را دستی انتخاب کنید');
   };
 
-  const downloadOutput = () => {
-    if (!outputText) return;
-    const stamp = formatJalaliShort(today).replace(/\//g, '-');
-    if (style === 'csv') {
-      downloadText(`day-summary-${stamp}.csv`, outputText, 'text/csv;charset=utf-8');
-    } else {
-      const ext = style === 'markdown' ? 'md' : 'txt';
-      downloadText(`day-summary-${stamp}.${ext}`, outputText, 'text/plain;charset=utf-8');
-    }
+  const downloadTxt = () => {
+    if (inRangeSelected.length === 0) { notify('اول چند روز را انتخاب کنید'); return; }
+    downloadText(`day-summary-${jalaliStamp()}.txt`, outputText, 'text/plain;charset=utf-8');
+    notify('فایل متنی دانلود شد');
   };
 
-  const outputLabel = source === 'weeks' ? 'خلاصه هفته‌ها' : source === 'months' ? 'خلاصه ماه‌ها' : source === 'selected' ? 'روزهای انتخاب‌شده' : source === 'rangeScored' ? 'همه روزهای نمره‌دار بازه' : 'همه روزهای بازه';
+  const downloadCsv = () => {
+    if (inRangeSelected.length === 0) { notify('اول چند روز را انتخاب کنید'); return; }
+    downloadText(`day-summary-${jalaliStamp()}.csv`, buildSummaryCsv(inRangeSelected, opts));
+    notify('فایل CSV دانلود شد');
+  };
+
+  const scoredDays = stats.filter((d) => d.score != null).map((d) => d.day);
+  const notedDays = stats.filter((d) => (d.dayNote ?? '').trim() || d.wins.trim() || d.lessons.trim()).map((d) => d.day);
+  const greatDays = stats.filter((d) => d.score != null && d.score >= 8).map((d) => d.day);
+  const weakDays = stats.filter((d) => d.score != null && d.score < 5).map((d) => d.day);
+
+  const calGrid = useMemo(() => getMonthGrid(calJ.jy, calJ.jm, weekStart), [calJ, weekStart]);
+  const calWeekLabels = weekStart === 'mon'
+    ? ['د', 'س', 'چ', 'پ', 'ج', 'ش', 'ی']
+    : J_WEEKDAYS_SHORT;
+
+  const shiftCal = (delta: number) => {
+    const next = addMonthsJalali(calJ.jy, calJ.jm, delta);
+    setCalJ({ jy: next.jy, jm: next.jm });
+  };
+
+  const avgDelta = s.avg != null && prevS.avg != null ? Math.round((s.avg - prevS.avg) * 10) / 10 : null;
 
   return (
     <div className="space-y-5">
-      {/* ── نوار بازه زمانی ───────────────────────────────── */}
+      {flash && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-emerald-500/10 px-4 py-2.5 text-[12px] font-bold text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-300"
+        >
+          {flash}
+        </motion.div>
+      )}
+
+      {/* ── انتخاب بازه ───────────────────────────────────── */}
       <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1.5 text-xs font-black text-slate-500 dark:text-slate-300">
-            <CalendarRange size={16} className="text-emerald-500" /> بازه زمانی
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-600/20">
+            <Gauge size={19} />
           </span>
-          <Segmented
-            size="sm"
-            value={preset}
-            onChange={setPreset}
-            options={PRESETS.filter((p) => p.v !== 'custom').map((p) => ({ v: p.v, label: p.label }))}
-          />
-          <Btn size="sm" variant={preset === 'custom' ? 'primary' : 'outline'} onClick={() => setPreset('custom')}>
-            بازه دلخواه
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[15px] font-black text-slate-800 dark:text-white">تحلیل روزها</h2>
+            <p className="text-[11px] text-slate-400">
+              {range.label} • {toFa(range.days.length)} روز • از {formatJalali(range.from)} تا {formatJalali(range.to)}
+            </p>
+          </div>
+          <Btn size="sm" variant="soft" onClick={() => { selectMany(range.days); notify('همه روزهای بازه انتخاب شد'); }}>
+            <Check size={14} /> انتخاب همه روزهای بازه
           </Btn>
-          <span className="flex-1" />
-          <span className="rounded-xl bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-500 dark:bg-white/5 dark:text-slate-300">
-            {formatJalali(range.start)} تا {formatJalali(range.end)} • {toFa(days.length)} روز
-          </span>
+          <Btn size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            <X size={14} /> پاک‌کردن انتخاب
+          </Btn>
         </div>
-        {preset === 'custom' && (
-          <CustomRangePicker value={custom} onChange={setCustom} max={today} />
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-white/5">
+          <Segmented
+            value={preset}
+            onChange={(v) => setPreset(v)}
+            options={PRESETS.map((p) => ({ v: p.v, label: p.label }))}
+          />
+          {preset === 'custom' && (
+            <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
+              <div className="min-w-[220px]">
+                <span className="mb-1 block text-[11px] font-bold text-slate-500">از تاریخ</span>
+                <JalaliDateField value={customFrom} onChange={(v) => v != null && setCustomFrom(v)} allowClear={false} />
+              </div>
+              <div className="min-w-[220px]">
+                <span className="mb-1 block text-[11px] font-bold text-slate-500">تا تاریخ</span>
+                <JalaliDateField value={customTo} onChange={(v) => v != null && setCustomTo(v)} allowClear={false} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {sinceLast != null && sinceLast >= 3 && (
+          <p className="mt-3 flex items-center gap-1.5 rounded-2xl bg-amber-500/[0.07] px-3.5 py-2.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-500/20 dark:text-amber-300">
+            <Info size={14} /> {toFa(sinceLast)} روز از آخرین نمره ثبت‌شده گذشته — «بازتاب پایان روز» را در صفحه روز جاری بنویس.
+          </p>
         )}
       </Card>
 
       {/* ── کارت‌های آماری ────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatTile
-          icon={<Star size={18} />} tone="amber"
+        <Kpi
+          icon={<Star size={19} />}
+          c="from-amber-500 to-orange-600"
           label="میانگین نمره"
-          value={avgScore != null ? `${formatScore(avgScore)} از ۱۰` : NOT_RECORDED}
-          sub={`${toFa(scored.length)} روز نمره‌دار از ${toFa(days.length)} روز`}
+          value={s.avg != null ? `${formatScore(s.avg)} از ۱۰` : EMPTY_LABEL}
+          sub={
+            avgDelta != null
+              ? `${avgDelta === 0 ? 'بدون تغییر' : `${avgDelta > 0 ? '▲' : '▼'} ${formatScore(Math.abs(avgDelta))} نسبت به بازه قبل`}`
+              : `بازه قبل نمره‌ای نداشت`
+          }
+          tone={avgDelta == null ? 'slate' : avgDelta > 0 ? 'green' : avgDelta < 0 ? 'red' : 'slate'}
         />
-        <StatTile
-          icon={<Target size={18} />} tone="violet"
-          label="میانه نمره‌ها"
-          value={medScore != null ? `${formatScore(medScore)} از ۱۰` : NOT_RECORDED}
-          sub={`پوشش ثبت نمره: ${toFa(scoredDaysPct)}٪ روزهای بازه`}
+        <Kpi
+          icon={<ListChecks size={19} />}
+          c="from-sky-500 to-blue-600"
+          label="روزهای نمره‌دار"
+          value={`${toFa(s.count)} از ${toFa(range.days.length)} روز`}
+          sub={range.days.length ? `${toFa(Math.round((s.count / range.days.length) * 100))}٪ روزهای بازه` : 'بازه خالی است'}
         />
-        <StatTile
-          icon={<LineIcon size={18} />} tone={delta == null ? 'slate' : delta >= 0 ? 'green' : 'rose'}
-          label="روند نسبت به بازه قبل"
-          value={delta == null ? 'قابل مقایسه نیست' : `${delta >= 0 ? '▲' : '▼'} ${formatScore(Math.abs(delta))}`}
-          sub={prevAvg != null ? `میانگین بازه قبل: ${formatScore(prevAvg)} از ۱۰` : 'در بازه قبل نمره‌ای ثبت نشده'}
+        <Kpi
+          icon={<Award size={19} />}
+          c="from-emerald-500 to-teal-600"
+          label="بهترین روز"
+          value={s.best && s.max != null ? formatScore(s.max) : EMPTY_LABEL}
+          sub={s.best ? formatJalali(s.best.day, { weekday: true }) : 'نمره‌ای ثبت نشده'}
         />
-        <StatTile
-          icon={<Sparkles size={18} />} tone="green"
-          label="ثبت‌شده‌ها"
-          value={`${toFa(scored.length)} روز`}
-          sub={`بهره‌وری تسک‌ها: ${taskRate != null ? `${toFa(taskRate)}٪` : NOT_RECORDED} • عادت‌ها: ${toFa(habitRate)}٪`}
+        <Kpi
+          icon={<TrendingDown size={19} />}
+          c="from-rose-500 to-pink-600"
+          label="ضعیف‌ترین روز"
+          value={s.worst && s.min != null ? formatScore(s.min) : EMPTY_LABEL}
+          sub={s.worst ? formatJalali(s.worst.day, { weekday: true }) : 'نمره‌ای ثبت نشده'}
         />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-3">
-        {/* ── تقویم نمره ──────────────────────────────────── */}
-        <div className="xl:col-span-2">
-          <ScoreCalendar
-            selected={selected}
-            onToggle={toggleDay}
-            onSelectRange={(r) => setSelected(new Set(r))}
-            refMap={refMap}
-            weekStart={weekStart}
-            onJumpRange={(r) => { setPreset('custom'); setCustom(r); }}
-          />
-        </div>
-        <div className="space-y-5">
-          <Card>
-            <CardHead title="بهترین و ضعیف‌ترین روزها" sub="بر اساس نمره ثبت‌شده در این بازه" />
-            <div className="space-y-3 px-5 pb-5">
-              <ExtremeRow tone="green" title="بهترین روز" day={best?.day ?? null} score={best?.value ?? null} />
-              <ExtremeRow tone="rose" title="ضعیف‌ترین روز" day={worst?.day ?? null} score={worst?.value ?? null} />
-              <div className="rounded-2xl bg-slate-50 p-3.5 text-[11px] leading-6 text-slate-500 dark:bg-white/5 dark:text-slate-400">
-                میانگین حال روزانه: <b className="tabular">{moodAvg != null ? `${moodFace(Math.round(moodAvg))} ${formatScore(moodAvg)} از ۵` : NOT_RECORDED}</b>
-                <br />
-                روزهای ورزش: <b className="tabular">{toFa(stats.filter((d) => d.sport).length)}</b> •
-                روزهای بیرون: <b className="tabular">{toFa(stats.filter((d) => d.wentOut).length)}</b>
-              </div>
-              <AvgSleepRow stats={stats} />
-            </div>
-          </Card>
-        </div>
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <Kpi
+          icon={<Smile size={19} />}
+          c="from-violet-500 to-purple-600"
+          label="میانگین حال روز"
+          value={roll.avgMood != null ? `${formatScore(roll.avgMood)} از ۵` : EMPTY_LABEL}
+          sub={roll.moodCount ? `${toFa(roll.moodCount)} روز ثبت‌شده • ${moodFace(Math.round(roll.avgMood ?? 0))}` : 'حالی ثبت نشده'}
+        />
+        <Kpi
+          icon={<Target size={19} />}
+          c="from-teal-500 to-emerald-600"
+          label="میانگین انجام تسک‌ها"
+          value={roll.avgTasksPct != null ? `${toFa(roll.avgTasksPct)}٪` : EMPTY_LABEL}
+          sub={`${toFa(roll.doneTasks)} از ${toFa(roll.totalTasks)} تسک در بازه`}
+        />
+        <Kpi
+          icon={<Activity size={19} />}
+          c="from-lime-500 to-green-600"
+          label="روزهای ورزش"
+          value={`${toFa(roll.sportDays)} روز`}
+          sub={`بیرون رفتن: ${toFa(roll.outDays)} روز`}
+        />
+        <Kpi
+          icon={<BedDouble size={19} />}
+          c="from-indigo-500 to-blue-700"
+          label="میانگین خواب"
+          value={roll.avgSleepMin != null ? formatDurationFa(roll.avgSleepMin) : EMPTY_LABEL}
+          sub={roll.sleepCount ? `${toFa(roll.sleepCount)} شب ثبت‌شده` : 'ساعت خواب ثبت نشده'}
+        />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        {/* ── نمودار نمره روزانه ─────────────────────────── */}
-        <Card>
-          <CardHead
-            title="نمره روزها در این بازه"
-            sub="روی هر ستون نگه دارید تا جزئیات همان روز را ببینید"
-          />
-          <div className="px-5 pb-5">
-            {stats.length === 0 ? (
-              <Empty icon={<BarChart3 size={24} />} title="بازه خالی است" />
-            ) : (
-              <ScoreBars stats={stats} onPick={(d) => toggleDay(d)} selected={selected} />
-            )}
-          </div>
-        </Card>
-
-        {/* ── توزیع و الگو هفتگی ─────────────────────────── */}
-        <Card>
-          <CardHead title="توزیع نمره‌ها و الگوی هفتگی" sub="کدام بازه‌ها و کدام روزهای هفته بهتر بوده‌اند" />
-          <div className="space-y-5 px-5 pb-5">
-            <div>
-              <p className="mb-2 text-[11px] font-black text-slate-500">پراکندگی نمره (۰ تا ۱۰)</p>
-              <div className="flex items-end gap-1.5" dir="ltr">
-                {hist.map((b) => {
-                  const maxC = Math.max(...hist.map((h) => h.count), 1);
-                  return (
-                    <div key={b.from} className="flex flex-1 flex-col items-center gap-1" title={`${b.from} تا ${(b.from + 1).toFixed(1)}: ${b.count} روز`}>
-                      <span className="tabular text-[10px] font-bold text-slate-400">{b.count > 0 ? toFa(b.count) : ''}</span>
-                      <div
-                        className="w-full rounded-t-md transition-all"
-                        style={{
-                          height: Math.max(b.count ? 8 : 3, (b.count / maxC) * 90),
-                          background: b.from >= 8 ? '#10b981' : b.from >= 5 ? '#f59e0b' : b.from >= 3 ? '#fb923c' : '#f43f5e',
-                          opacity: b.count ? 1 : 0.25,
-                        }}
-                      />
-                      <span className="tabular text-[9px] font-bold text-slate-400">{toFa(b.from)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-[11px] font-black text-slate-500">میانگین نمره به تفکیک روز هفته</p>
-              <div className="flex flex-wrap gap-1.5" dir="rtl">
-                {weekdayAvg.map((w) => (
-                  <div
-                    key={w.wd}
-                    className={cx(
-                      'min-w-[62px] flex-1 rounded-xl border p-2 text-center',
-                      w.avgScore == null ? 'border-slate-100 dark:border-white/5' : 'border-transparent bg-emerald-500/[0.07]',
-                    )}
-                    title={`${J_WEEKDAYS[w.wd]} — ${w.count} روز نمره‌دار`}
-                  >
-                    <p className="text-[10px] font-bold text-slate-400">{J_WEEKDAYS_SHORT[w.wd]}</p>
-                    <p className="tabular text-[13px] font-black text-slate-700 dark:text-slate-100">
-                      {w.avgScore != null ? formatScore(w.avgScore) : NOT_RECORDED}
-                    </p>
-                    <p className="tabular text-[9px] text-slate-400">{toFa(w.count)} روز</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* ── انتخاب روزها ─────────────────────────────────── */}
+      {/* ── روند نمره‌ها ─────────────────────────────────── */}
       <Card>
         <CardHead
-          title="انتخاب روزها"
-          sub="روی خانه‌های تقویم یا ستون‌های نمودار کلیک کنید؛ یا روزهای تصادفی/دارای نمره را یک‌جا انتخاب کنید"
-          action={<Badge tone={selected.size ? 'green' : 'slate'}>{toFa(selected.size)} روز انتخاب‌شده</Badge>}
+          title="روند نمره روزها"
+          sub={`${range.label} — نقاط خاکستری پایین نمودار یعنی آن روز نمره ثبت نشده`}
+          action={
+            trend != null ? (
+              <Badge tone={trend > 0 ? 'green' : trend < 0 ? 'red' : 'slate'}>
+                {trend > 0 ? <TrendingUp size={12} /> : trend < 0 ? <TrendingDown size={12} /> : null}
+                روند: {trend === 0 ? 'ثابت' : `${trend > 0 ? '+' : '−'}${formatScore(Math.abs(trend))}`}
+              </Badge>
+            ) : undefined
+          }
         />
-        <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
-          <Btn size="sm" variant="soft" onClick={selectScoredInRange}>
-            <ListChecks size={14} /> انتخاب روزهای نمره‌دار بازه ({toFa(scored.length)})
-          </Btn>
-          <Btn size="sm" variant="outline" onClick={selectAllInRange}>
-            <MousePointerClick size={14} /> انتخاب همه روزهای بازه ({toFa(days.length)})
-          </Btn>
-          <Btn size="sm" variant="ghost" onClick={clearSelection} disabled={selected.size === 0}>
-            <Eraser size={14} /> پاک کردن انتخاب
-          </Btn>
-          <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:block dark:bg-white/10" />
-          <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-300">
-            <Dices size={15} className="text-violet-500" /> تعداد تصادفی
-          </span>
-          <input
-            type="number"
-            min={1}
-            max={365}
-            value={randomN}
-            onChange={(e) => setRandomN(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
-            className="tabular h-8 w-16 rounded-xl border border-slate-200 bg-slate-50/60 px-2 text-center text-xs font-bold dark:border-white/10 dark:bg-white/5"
-            aria-label="تعداد روزهای تصادفی"
+        <div className="px-4 pb-4">
+          <ScoreTrend
+            points={stats.map((d) => ({
+              label: toFa(toJalaali(new Date(d.day)).jd),
+              value: d.score,
+              hint: `${formatJalali(d.day, { weekday: true })} — نمره: ${d.score != null ? formatScore(d.score) : EMPTY_LABEL}`,
+            }))}
           />
-          <Btn size="sm" variant="soft" onClick={pickRandom} disabled={(randomOnlyScored ? scored.length : days.length) === 0}>
-            <Wand2 size={14} /> انتخاب تصادفی
-          </Btn>
-          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={randomOnlyScored}
-              onChange={(e) => setRandomOnlyScored(e.target.checked)}
-              className="h-3.5 w-3.5 accent-emerald-600"
-            />
-            فقط روزهای نمره‌دار
-          </label>
         </div>
-        {selected.size > 0 && (
-          <div className="px-5 pb-5">
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-300">
-              <span>میانگین نمره انتخاب‌شده‌ها: <b className="tabular text-amber-600 dark:text-amber-300">{selectedAvg != null ? `${formatScore(selectedAvg)} از ۱۰` : NOT_RECORDED}</b></span>
-              <span>•</span>
-              <span>روزهای بدون نمره: <b className="tabular">{toFa(selectedStats.length - selectedScores.length)}</b></span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {selectedStats.map((d) => (
-                <button
-                  key={d.day}
-                  onClick={() => toggleDay(d.day)}
-                  title={`${formatJalali(d.day, { weekday: true })} — نمره: ${d.score != null ? formatScore(d.score) : NOT_RECORDED}`}
-                  className="group flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/[0.08] px-2.5 py-1 text-[11px] font-bold text-emerald-700 transition hover:bg-rose-500/10 hover:text-rose-600 dark:text-emerald-300"
-                >
-                  <span className="tabular">{formatJalaliShort(d.day)}</span>
-                  {d.score != null ? <span className="tabular opacity-80">{formatScore(d.score)}</span> : <span className="opacity-60">بدون نمره</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="grid gap-3 border-t border-slate-100 px-5 py-4 text-center sm:grid-cols-4 dark:border-white/5">
+          <MiniStat label="میانه نمره‌ها" value={s.median != null ? formatScore(s.median) : EMPTY} />
+          <MiniStat label="نوسان (انحراف معیار)" value={s.std != null ? formatScore(s.std) : EMPTY} hint="کمتر = روزهای پایدارتر" />
+          <MiniStat label="روزهای عالی (۸ به بالا)" value={toFa(s.greatDays)} hint={streakDays.length > 1 ? `بهترین رشته: ${toFa(streakDays.length)} روز پیاپی` : 'رشته‌ای ثبت نشده'} />
+          <MiniStat label="روزهای ضعیف (زیر ۵)" value={toFa(s.lowDays)} />
+        </div>
       </Card>
 
-      {/* ── ساخت خروجی متنی ─────────────────────────────── */}
+      {/* ── تقویم نمره‌ها ─────────────────────────────────── */}
       <Card>
         <CardHead
-          title="کپی/دریافت خلاصه روزها"
-          sub="خروجی کاملاً شفاف است: هر چیزی که ثبت نشده، صریحاً «ثبت نشده» یا «خالی» نوشته می‌شود"
+          title="تقویم نمره‌ها"
+          sub="رنگ خانه‌ها شدت نمره است • کلیک = انتخاب/حذف برای خروجی • دابل‌کلیک = جزئیات کامل روز"
           action={
-            <div className="flex items-center gap-2">
-              <Badge tone="violet"><ClipboardCopy size={12} /> {outputLabel}</Badge>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => shiftCal(-1)} title="ماه قبل" className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
+                <ChevronRight size={17} />
+              </button>
+              <span className="min-w-[110px] text-center text-[13px] font-black text-slate-700 dark:text-slate-200">
+                {J_MONTHS[calJ.jm - 1]} {toFa(calJ.jy)}
+              </span>
+              <button onClick={() => shiftCal(1)} title="ماه بعد" className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
+                <ChevronLeft size={17} />
+              </button>
             </div>
           }
         />
+        <div className="px-4 pb-4">
+          <div className="grid grid-cols-7 gap-1">
+            {calWeekLabels.map((w, i) => (
+              <div key={w + i} className={cx('py-1.5 text-center text-[11px] font-black', (weekStart === 'sat' ? i === 6 : i === 5) ? 'text-rose-400' : 'text-slate-400')}>
+                {w}
+              </div>
+            ))}
+            {calGrid.map((cell, i) => {
+              const st = statByDay.get(cell.ts);
+              const score = st?.score ?? null;
+              const isSel = selected.has(cell.ts);
+              const jsDay = new Date(cell.ts).getDay();
+              const isHoliday = weekStart === 'sat' ? jsDay === 5 : jsDay === 4 || jsDay === 5;
+              return (
+                <button
+                  key={i}
+                  onClick={() => cell.inMonth && toggleDay(cell.ts)}
+                  onDoubleClick={() => { setDetailDay(cell.ts); setCalJ({ jy: cell.jy, jm: cell.jm }); }}
+                  title={
+                    `${formatJalali(cell.ts, { weekday: true })} — نمره: ${score != null ? formatScore(score) : EMPTY_LABEL}` +
+                    `${st?.mood != null ? ` • حال: ${moodFace(st.mood)}` : ''}` +
+                    `${st?.hasReflection ? ' • بازتاب ثبت شده' : ''}` +
+                    `${isSel ? ' • انتخاب‌شده' : ''}`
+                  }
+                  className={cx(
+                    'relative flex min-h-[62px] flex-col items-center justify-start gap-0.5 rounded-2xl border p-1 transition-all sm:min-h-[76px]',
+                    isSel
+                      ? 'border-emerald-500 ring-2 ring-emerald-500/40'
+                      : cell.isToday
+                        ? 'border-emerald-400/70'
+                        : 'border-transparent hover:border-slate-200 dark:hover:border-white/10',
+                    !cell.inMonth && 'opacity-30',
+                    score != null && cell.inMonth ? scoreHeatClass(score) : 'bg-white dark:bg-transparent',
+                  )}
+                >
+                  <span className={cx(
+                    'tabular grid h-6 w-6 place-items-center rounded-full text-[12px] font-black',
+                    cell.isToday
+                      ? 'bg-emerald-500 text-white'
+                      : isHoliday && cell.inMonth ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300',
+                  )}>
+                    {toFa(cell.jd)}
+                  </span>
+                  {score != null ? (
+                    <span className="tabular rounded-full bg-white/70 px-1.5 text-[10px] font-black text-slate-700 dark:bg-slate-900/70 dark:text-slate-100">
+                      {formatScore(score)}
+                    </span>
+                  ) : cell.inMonth ? (
+                    <span className="text-[9px] font-bold text-slate-300 dark:text-slate-600">—</span>
+                  ) : null}
+                  {st?.mood != null && <span className="text-[10px] leading-none">{moodFace(st.mood)}</span>}
+                  {isSel && (
+                    <span className="absolute -top-1 left-1 grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-white">
+                      <CheckIcon size={10} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+            <span className="flex items-center gap-1.5 font-bold">راهنمای رنگ نمره:</span>
+            {SCORE_LEGEND.map((l) => (
+              <span key={l.label} className="flex items-center gap-1.5">
+                <span className={cx('h-3.5 w-3.5 rounded-md', l.cls)} /> {l.label}
+              </span>
+            ))}
+            <span className="flex items-center gap-1.5">
+              <span className="h-3.5 w-3.5 rounded-md border border-emerald-400" /> امروز
+            </span>
+          </div>
+        </div>
+      </Card>
 
-        <div className="grid gap-4 px-5 pb-5 lg:grid-cols-5">
-          {/* تنظیمات خروجی */}
-          <div className="space-y-3 lg:col-span-2">
-            <div>
-              <p className="mb-1.5 text-[11px] font-black text-slate-500">منبع خروجی</p>
-              <Segmented
-                size="sm"
-                value={source}
-                onChange={setSource}
-                options={[
-                  { v: 'selected', label: `انتخاب‌شده (${toFa(selected.size)})` },
-                  { v: 'rangeScored', label: 'نمره‌دار بازه' },
-                  { v: 'rangeAll', label: 'همه بازه' },
-                  { v: 'weeks', label: 'هفته‌ها' },
-                  { v: 'months', label: 'ماه‌ها' },
+      {/* ── توزیع‌ها ─────────────────────────────────────── */}
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card>
+          <CardHead title="توزیع نمره‌ها" sub={`${toFa(s.count)} روز نمره‌دار در ${range.label}`} />
+          <div className="px-5 pb-5">
+            {s.count === 0 ? (
+              <Empty icon={<Star size={26} />} title="نمره‌ای در این بازه نیست" sub="از «روز جاری» بازتاب بنویس و نمره بده" />
+            ) : (
+              <Bars data={dist} height={150} formatTick={(v) => (v > 0 ? toFa(v) : '')} averageLabel={null} />
+            )}
+          </div>
+        </Card>
+        <Card>
+          <CardHead title="توزیع حال روزها" sub="شمار روزها به تفکیک حال ثبت‌شده" />
+          <div className="px-5 pb-5">
+            {roll.moodCount === 0 ? (
+              <Empty icon={<Smile size={26} />} title="حال روزی ثبت نشده" sub="در بازتاب پایان روز، حالت را انتخاب کن" />
+            ) : (
+              <Bars data={moods} height={150} formatTick={(v) => (v > 0 ? toFa(v) : '')} averageLabel={null} />
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* ── بازه‌های هفتگی و ماهانه ───────────────────────── */}
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card>
+          <CardHead title="میانگین هفتگی" sub="بر اساس هفته‌های شمسی (شنبه/دوشنبه بر اساس تنظیمات)" />
+          <div className="space-y-2.5 px-5 pb-5">
+            {weeks.length === 0 && <p className="rounded-2xl bg-slate-50 py-4 text-center text-xs text-slate-400 dark:bg-white/5">داده‌ای نیست</p>}
+            {weeks.map((w) => (
+              <PeriodRow
+                key={w.key}
+                label={w.label}
+                sub={w.sub}
+                score={w.avgScore}
+                tasksPct={w.avgTasksPct}
+                habitRate={w.habitRate}
+                onPick={() => selectMany(w.days.map((d) => d.day))}
+              />
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <CardHead title="میانگین ماهانه" sub="ماه‌های شمسی موجود در بازه" />
+          <div className="space-y-2.5 px-5 pb-5">
+            {months.length === 0 && <p className="rounded-2xl bg-slate-50 py-4 text-center text-xs text-slate-400 dark:bg-white/5">داده‌ای نیست</p>}
+            {months.map((m) => (
+              <PeriodRow
+                key={m.key}
+                label={m.label}
+                sub={m.sub}
+                score={m.avgScore}
+                tasksPct={m.avgTasksPct}
+                habitRate={m.habitRate}
+                onPick={() => selectMany(m.days.map((d) => d.day))}
+              />
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* ── مقایسه با بازه قبل + نکات ─────────────────────── */}
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card>
+          <CardHead title="مقایسه با بازه قبلی" sub={`بازه‌ای هم‌اندازه، پیش از ${formatJalali(range.from)}`} />
+          <div className="space-y-3 px-5 pb-5">
+            <CompareRow
+              label="میانگین نمره"
+              now={s.avg}
+              prev={prevS.avg}
+              format={(v) => `${formatScore(v)} از ۱۰`}
+            />
+            <CompareRow
+              label="میانگین حال روز"
+              now={roll.avgMood}
+              prev={prevRoll.avgMood}
+              format={(v) => `${formatScore(v)} از ۵`}
+            />
+            <CompareRow
+              label="میانگین انجام تسک‌ها"
+              now={roll.avgTasksPct}
+              prev={prevRoll.avgTasksPct}
+              format={(v) => `${toFa(Math.round(v))}٪`}
+            />
+            <CompareRow
+              label="روزهای ورزش"
+              now={roll.sportDays}
+              prev={prevRoll.sportDays}
+              format={(v) => `${toFa(Math.round(v))} روز`}
+            />
+          </div>
+        </Card>
+
+        <Card>
+          <CardHead title="نکات و بینش‌های بازه" sub="تحلیل خودکار بر اساس داده‌های ثبت‌شده" />
+          <ul className="space-y-2 px-5 pb-5">
+            {buildLifeInsights({
+              stats, s, roll, streakDays, sinceLast, range,
+            }).map((t, i) => (
+              <li key={i} className="flex items-start gap-2.5 rounded-2xl bg-violet-500/[0.06] px-3.5 py-3 text-[12px] leading-6 text-slate-600 ring-1 ring-violet-500/15 dark:text-slate-300">
+                <Sparkles size={15} className="mt-0.5 shrink-0 text-violet-500" />
+                {t}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+
+      {/* ── کارگاه خروجی متنی ────────────────────────────── */}
+      <Card>
+        <CardHead
+          title="ساخت خروجی متنی از روزها"
+          sub="۱ یا چند روز را انتخاب کنید (یا به‌صورت تصادفی انتخاب کنید) و خلاصه کامل با نمره یا بدون نمره بگیرید"
+          action={<Badge tone={inRangeSelected.length ? 'green' : 'slate'}>{toFa(inRangeSelected.length)} روز انتخاب‌شده</Badge>}
+        />
+
+        <div className="space-y-4 px-5 pb-5">
+          {/* انتخاب سریع */}
+          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+            <p className="mb-2 text-[11px] font-black text-slate-500">انتخاب سریع</p>
+            <div className="flex flex-wrap gap-1.5">
+              <Chip onClick={() => selectMany(range.days)}><ListChecks size={13} /> همه روزهای بازه</Chip>
+              <Chip onClick={() => selectMany(scoredDays)}><Star size={13} /> روزهای دارای نمره ({toFa(scoredDays.length)})</Chip>
+              <Chip onClick={() => selectMany(notedDays)}><FileText size={13} /> روزهای دارای توضیحات ({toFa(notedDays.length)})</Chip>
+              <Chip tone="amber" onClick={() => selectMany(greatDays)}><Award size={13} /> روزهای عالی ({toFa(greatDays.length)})</Chip>
+              <Chip tone="slate" onClick={() => selectMany(weakDays)}><TrendingDown size={13} /> روزهای ضعیف ({toFa(weakDays.length)})</Chip>
+              <Chip onClick={() => setSelected(new Set())}><X size={13} /> هیچ‌کدام</Chip>
+            </div>
+          </div>
+
+          {/* انتخاب تصادفی */}
+          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+            <p className="mb-2 text-[11px] font-black text-slate-500">انتخاب تصادفی</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-[12px] font-bold text-slate-500">
+                تعداد:
+                <input
+                  value={String(randomN)}
+                  onChange={(e) => {
+                    const n = Number(e.target.value.replace(/[^0-9۰-۹]/g, '').replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))));
+                    if (!Number.isNaN(n)) setRandomN(Math.max(1, Math.min(200, n)));
+                  }}
+                  inputMode="numeric"
+                  dir="ltr"
+                  className={cx(inputCls, 'tabular h-9 w-20 text-center')}
+                />
+              </label>
+              <Chip active={randomOnlyScored} onClick={() => setRandomOnlyScored((v) => !v)}>
+                {randomOnlyScored ? <Check size={13} /> : null} فقط روزهای دارای نمره
+              </Chip>
+              <Btn
+                onClick={() => {
+                  const pool = (randomOnlyScored ? scoredDays : range.days);
+                  if (pool.length === 0) { notify('روزی برای انتخاب تصادفی وجود ندارد'); return; }
+                  const picked = pickRandom(pool, randomN);
+                  selectMany(picked);
+                  notify(`${toFa(picked.length)} روز تصادفی انتخاب شد`);
+                }}
+              >
+                <Shuffle size={15} /> انتخاب تصادفی
+              </Btn>
+              <Btn
+                variant="soft"
+                onClick={() => {
+                  const rest = inRangeSelected.length > 1 ? inRangeSelected.map((d) => d.day) : range.days;
+                  if (rest.length < 2) return;
+                  const shuffled = pickRandom(rest, rest.length);
+                  selectMany(shuffled);
+                  notify('ترتیب روزها تصادفی (تصادفی‌سازی ترتیب) شد');
+                }}
+              >
+                <Dices size={15} /> تصادفی‌کردن ترتیب
+              </Btn>
+            </div>
+            <p className="mt-2 text-[10px] leading-5 text-slate-400">
+              انتخاب تصادفی از میان روزهای بازه انجام می‌شود و جایگزین انتخاب فعلی می‌شود.
+            </p>
+          </div>
+
+          {/* گزینه‌های خروجی */}
+          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] font-black text-slate-500">محتوای خروجی</p>
+              <div className="flex gap-1.5">
+                <Chip onClick={() => setOpts(DEFAULT_SUMMARY_OPTIONS)}><RefreshCw size={13} /> حالت پیش‌فرض</Chip>
+                <Chip
+                  onClick={() =>
+                    setOpts({
+                      includeScore: false, includeMood: true, includeNote: true, includeReflection: true,
+                      includeBasics: true, includeHabits: true, includeTasks: false, includeEvents: false,
+                      showEmpty: true, includeStats: true, includeHeader: true,
+                    })
+                  }
+                >
+                  <FileText size={13} /> فقط توضیحات (بدون نمره)
+                </Chip>
+                <Chip
+                  onClick={() =>
+                    setOpts({
+                      includeScore: true, includeMood: true, includeNote: true, includeReflection: true,
+                      includeBasics: true, includeHabits: true, includeTasks: true, includeEvents: true,
+                      showEmpty: true, includeStats: true, includeHeader: true,
+                    })
+                  }
+                >
+                  <Gauge size={13} /> کامل (همه بخش‌ها)
+                </Chip>
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <OptRow label="نمره روز" icon={<Star size={14} />} checked={opts.includeScore} onChange={(v) => setOpts((o) => ({ ...o, includeScore: v }))} />
+              <OptRow label="حال روز" icon={<Smile size={14} />} checked={opts.includeMood} onChange={(v) => setOpts((o) => ({ ...o, includeMood: v }))} />
+              <OptRow label="توضیحات روز" icon={<FileText size={14} />} checked={opts.includeNote} onChange={(v) => setOpts((o) => ({ ...o, includeNote: v }))} />
+              <OptRow label="دستاورد/بهبود/درس/قدردانی" icon={<Award size={14} />} checked={opts.includeReflection} onChange={(v) => setOpts((o) => ({ ...o, includeReflection: v }))} />
+              <OptRow label="خواب، ورزش، بیرون" icon={<BedDouble size={14} />} checked={opts.includeBasics} onChange={(v) => setOpts((o) => ({ ...o, includeBasics: v }))} />
+              <OptRow label="عادت‌ها" icon={<Flame size={14} />} checked={opts.includeHabits} onChange={(v) => setOpts((o) => ({ ...o, includeHabits: v }))} />
+              <OptRow label="تسک‌های روز" icon={<ListChecks size={14} />} checked={opts.includeTasks} onChange={(v) => setOpts((o) => ({ ...o, includeTasks: v }))} />
+              <OptRow label="رویدادهای روز" icon={<CalendarRange size={14} />} checked={opts.includeEvents} onChange={(v) => setOpts((o) => ({ ...o, includeEvents: v }))} />
+              <OptRow label={`نمایش موارد خالی با «${EMPTY_LABEL}»`} icon={<Info size={14} />} checked={opts.showEmpty} onChange={(v) => setOpts((o) => ({ ...o, showEmpty: v }))} />
+              <OptRow label="خلاصه آماری ابتدای متن" icon={<Gauge size={14} />} checked={opts.includeStats} onChange={(v) => setOpts((o) => ({ ...o, includeStats: v }))} />
+              <OptRow label="عنوان و بازه در ابتدای متن" icon={<CalendarRange size={14} />} checked={opts.includeHeader} onChange={(v) => setOpts((o) => ({ ...o, includeHeader: v }))} />
+            </div>
+          </div>
+
+          {/* لیست روزها برای انتخاب دستی */}
+          <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] font-black text-slate-500">
+                انتخاب دستی روزها ({range.label})
+              </p>
+              <span className="text-[10px] text-slate-400">کلیک = انتخاب/حذف • دابل‌کلیک = جزئیات روز</span>
+            </div>
+            {stats.length === 0 ? (
+              <Empty icon={<CalendarRange size={24} />} title="بازه خالی است" sub="بازه دیگری انتخاب کنید" />
+            ) : (
+              <div className="flex max-h-72 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                {stats.map((d) => {
+                  const on = selected.has(d.day);
+                  const j = toJalaali(new Date(d.day));
+                  return (
+                    <button
+                      key={d.day}
+                      onClick={() => toggleDay(d.day)}
+                      onDoubleClick={() => { setDetailDay(d.day); setCalJ({ jy: j.jy, jm: j.jm }); }}
+                      title={`${formatJalali(d.day, { weekday: true })} — نمره: ${d.score != null ? formatScore(d.score) : EMPTY_LABEL}${d.dayNote ? `\n${d.dayNote}` : ''}`}
+                      className={cx(
+                        'flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold transition active:scale-[0.97]',
+                        on
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                          : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-white/10 dark:text-slate-300',
+                        d.day === today && !on && 'ring-1 ring-emerald-400/50',
+                      )}
+                      style={on ? undefined : { background: d.score != null ? 'transparent' : undefined }}
+                    >
+                      <span className="tabular">{toFa(j.jd)} {J_MONTHS[j.jm - 1].slice(0, 4)}</span>
+                      {d.score != null ? (
+                        <span className="tabular rounded-md bg-amber-500/15 px-1.5 text-[10px] font-black text-amber-700 dark:text-amber-300">
+                          {formatScore(d.score)}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
+                      )}
+                      {d.mood != null && <span className="text-[11px] leading-none">{moodFace(d.mood)}</span>}
+                      {on && <CheckIcon size={11} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* دکمه‌های خروجی */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Btn onClick={copyOutput} disabled={inRangeSelected.length === 0}>
+              <Copy size={15} /> کپی متن خلاصه
+            </Btn>
+            <Btn variant="outline" onClick={downloadTxt} disabled={inRangeSelected.length === 0}>
+              <FileText size={15} /> دانلود متن (TXT)
+            </Btn>
+            <Btn variant="outline" onClick={downloadCsv} disabled={inRangeSelected.length === 0}>
+              <FileSpreadsheet size={15} /> دانلود جدول (CSV)
+            </Btn>
+            <Btn
+              variant="soft"
+              onClick={() =>
+                setOpts((o) => ({ ...o, includeScore: !o.includeScore }))
+              }
+              title="میان‌بر: روشن/خاموش کردن نمره در خروجی"
+            >
+              <Star size={15} /> {opts.includeScore ? 'خروجی با نمره' : 'خروجی بدون نمره'}
+            </Btn>
+            <span className="ms-auto text-[11px] text-slate-400">
+              {inRangeSelected.length ? `${toFa(outputText.length)} نویسه • ${toFa(inRangeSelected.length)} روز` : 'روزی انتخاب نشده است'}
+            </span>
+          </div>
+
+          {/* پیش‌نمایش */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 dark:border-white/5 dark:bg-white/[0.03]">
+              <span className="flex items-center gap-1.5 text-[11px] font-black text-slate-500">
+                <Eye size={14} /> پیش‌نمایش خروجی متنی
+              </span>
+              <span className="flex gap-1.5">
+                <button
+                  onClick={copyOutput}
+                  disabled={inRangeSelected.length === 0}
+                  className="rounded-lg px-2 py-1 text-[11px] font-bold text-slate-500 transition hover:bg-slate-200/70 disabled:opacity-40 dark:hover:bg-white/10"
+                >
+                  <Copy size={12} className="inline" /> کپی
+                </button>
+                <button
+                  onClick={downloadTxt}
+                  disabled={inRangeSelected.length === 0}
+                  className="rounded-lg px-2 py-1 text-[11px] font-bold text-slate-500 transition hover:bg-slate-200/70 disabled:opacity-40 dark:hover:bg-white/10"
+                >
+                  <Download size={12} className="inline" /> دانلود
+                </button>
+              </span>
+            </div>
+            <pre
+              dir="rtl"
+              className="max-h-96 overflow-auto whitespace-pre-wrap px-4 py-3 text-right text-[12px] leading-7 text-slate-700 dark:text-slate-200"
+            >
+              {inRangeSelected.length ? outputText : 'روزی برای خروجی انتخاب نشده است — از دکمه‌های بالا یا لیست روزها انتخاب کنید.'}
+            </pre>
+          </div>
+        </div>
+      </Card>
+
+      {/* ── جدول جزئیات روزهای بازه ───────────────────────── */}
+      <Card>
+        <CardHead title="جدول روزهای بازه" sub="نمای دقیق همه روزها؛ ستون‌های خالی با «ثبت نشده» مشخص شده‌اند" />
+        <div className="overflow-x-auto px-5 pb-5">
+          <table className="w-full min-w-[860px] text-right text-xs">
+            <thead>
+              <tr className="border-b border-slate-100 text-slate-400 dark:border-white/10">
+                <th className="py-2.5 font-bold">تاریخ</th>
+                <th className="py-2.5 font-bold">نمره</th>
+                <th className="py-2.5 font-bold">حال</th>
+                <th className="py-2.5 font-bold">توضیحات روز</th>
+                <th className="py-2.5 font-bold">عادت‌ها</th>
+                <th className="py-2.5 font-bold">تسک‌ها</th>
+                <th className="py-2.5 font-bold">خواب</th>
+                <th className="py-2.5 font-bold">ورزش</th>
+                <th className="py-2.5 font-bold" />
+              </tr>
+            </thead>
+            <tbody>
+              {stats.length === 0 && (
+                <tr><td colSpan={9} className="py-8 text-center text-slate-400">داده‌ای در این بازه نیست</td></tr>
+              )}
+              {[...stats].reverse().map((d) => (
+                <tr key={d.day} className="border-b border-slate-50 last:border-0 dark:border-white/5">
+                  <td className="py-2.5 font-black text-slate-700 dark:text-slate-200">
+                    {formatJalali(d.day, { weekday: true })}
+                    <span className="tabular mr-1.5 block text-[10px] font-bold text-slate-400">{formatJalaliShort(d.day)}</span>
+                  </td>
+                  <td className="py-2.5">
+                    {d.score != null ? (
+                      <span className="tabular inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 font-black text-amber-700 dark:text-amber-300">
+                        <Star size={11} /> {formatScore(d.score)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300 dark:text-slate-600">{EMPTY_LABEL}</span>
+                    )}
+                  </td>
+                  <td className="py-2.5">
+                    {d.mood != null
+                      ? <span title={moodLabel(d.mood)}>{moodFace(d.mood)} <span className="tabular text-slate-400">{formatScore(d.mood)}</span></span>
+                      : <span className="text-slate-300 dark:text-slate-600">{EMPTY_LABEL}</span>}
+                  </td>
+                  <td className="max-w-[260px] py-2.5 text-slate-500 dark:text-slate-300">
+                    <span className="line-clamp-2">{orEmpty(d.dayNote)}</span>
+                  </td>
+                  <td className="tabular py-2.5 text-slate-500 dark:text-slate-300">
+                    {d.habitsTotal > 0 ? `${toFa(d.habitsDone)}/${toFa(d.habitsTotal)}` : EMPTY_LABEL}
+                  </td>
+                  <td className="tabular py-2.5 text-slate-500 dark:text-slate-300">
+                    {d.tasksTotal > 0 ? `${toFa(d.tasksDone)}/${toFa(d.tasksTotal)} (${toFa(d.tasksPct)}٪)` : EMPTY_LABEL}
+                  </td>
+                  <td className="tabular py-2.5 text-slate-500 dark:text-slate-300">
+                    {d.sleepMin != null
+                      ? formatDurationFa(d.sleepMin)
+                      : d.wake || d.sleep
+                        ? `${d.sleep ? formatClock24(d.sleep) : EMPTY_LABEL} تا ${d.wake ? formatClock24(d.wake) : EMPTY_LABEL}`
+                        : EMPTY_LABEL}
+                  </td>
+                  <td className="py-2.5">
+                    {d.sport
+                      ? <Badge tone="green"><Footprints size={11} /> بله{d.sportType ? ` — ${d.sportType}` : ''}</Badge>
+                      : <span className="text-slate-300 dark:text-slate-600">{EMPTY_LABEL}</span>}
+                  </td>
+                  <td className="py-2.5">
+                    <button
+                      onClick={() => setDetailDay(d.day)}
+                      className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-emerald-500/10 hover:text-emerald-600"
+                      title="جزئیات کامل روز"
+                    >
+                      <Eye size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* ── مودال جزئیات روز ─────────────────────────────── */}
+      <Modal
+        open={detail != null}
+        onClose={() => setDetailDay(null)}
+        title={detail ? formatJalali(detail.day, { weekday: true }) : ''}
+        sub={detail ? `${formatJalaliShort(detail.day)} • نمای کامل داده‌های ثبت‌شده این روز` : undefined}
+        wide
+      >
+        {detail && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={detail.score != null ? 'amber' : 'slate'}>
+                <Star size={11} /> نمره: {detail.score != null ? `${formatScore(detail.score)} از ۱۰ (${scoreGrade(detail.score)})` : EMPTY_LABEL}
+              </Badge>
+              <Badge tone="violet"><Smile size={11} /> حال: {moodLabel(detail.mood)}</Badge>
+              <Badge tone={detail.tasksTotal ? 'green' : 'slate'}>
+                <ListChecks size={11} /> تسک: {detail.tasksTotal ? `${toFa(detail.tasksDone)} از ${toFa(detail.tasksTotal)}` : EMPTY_LABEL}
+              </Badge>
+              <Badge tone={detail.habitsTotal ? 'blue' : 'slate'}>
+                <Flame size={11} /> عادت: {detail.habitsTotal ? `${toFa(detail.habitsDone)} از ${toFa(detail.habitsTotal)}` : EMPTY_LABEL}
+              </Badge>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailBox title="📝 توضیحات روز" lines={[orEmpty(detail.dayNote)]} />
+              <DetailBox title="🏆 دستاوردها" lines={[orEmpty(detail.wins)]} />
+              <DetailBox title="🔧 قابل بهبود" lines={[orEmpty(detail.improve)]} />
+              <DetailBox title="💡 درس آموخته" lines={[orEmpty(detail.lessons)]} />
+              <DetailBox title="🙏 قدردانی" lines={[orEmpty(detail.gratitude)]} />
+              <DetailBox
+                title="😴 خواب، ورزش، بیرون"
+                lines={[
+                  detail.wake || detail.sleep
+                    ? `بیداری ${detail.wake ? formatClock24(detail.wake) : EMPTY_LABEL} • خواب ${detail.sleep ? formatClock24(detail.sleep) : EMPTY_LABEL}` +
+                      (detail.sleepMin != null ? ` • مدت ${formatDurationFa(detail.sleepMin)}` : '')
+                    : EMPTY_LABEL,
+                  detail.sport ? `ورزش: ${detail.sportType || 'بله'}` : `ورزش: ${EMPTY_LABEL}`,
+                  detail.wentOut ? `بیرون: ${detail.outPlace || 'بله'}` : `بیرون: ${EMPTY_LABEL}`,
                 ]}
               />
             </div>
 
-            <div>
-              <p className="mb-1.5 text-[11px] font-black text-slate-500">بخش‌های موجود در خروجی</p>
-              <div className="flex flex-wrap gap-1.5">
-                {FIELD_LABELS.map((f) => (
-                  <CheckPill
-                    key={f.k}
-                    checked={fields[f.k]}
-                    onChange={(v) => setFields((prev) => ({ ...prev, [f.k]: v }))}
-                  >
-                    {f.label}
-                  </CheckPill>
-                ))}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <Btn size="xs" variant="outline" onClick={() => setFields(allTrue)}>همه بخش‌ها</Btn>
-                <Btn size="xs" variant="outline" onClick={() => setFields({ ...allFalse, mood: true, progress: true, dayNote: true })}>فقط متن و حال</Btn>
-                <Btn size="xs" variant="outline" onClick={() => setFields({ ...allFalse, dayNote: true, wins: true, improve: true, lessons: true, gratitude: true })}>بدون نمره</Btn>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="mb-1.5 text-[11px] font-black text-slate-500">قالب</p>
-                <Segmented
-                  size="sm"
-                  value={style}
-                  onChange={setStyle}
-                  options={[{ v: 'plain', label: 'متنی' }, { v: 'markdown', label: 'مارک‌داون' }, { v: 'csv', label: 'CSV' }]}
-                />
-              </div>
-              <div>
-                <p className="mb-1.5 text-[11px] font-black text-slate-500">ترتیب روزها</p>
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortKey)}
-                  className="h-8 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-2 text-xs font-bold dark:border-white/10 dark:bg-white/5"
-                >
-                  <option value="asc">قدیمی به جدید</option>
-                  <option value="desc">جدید به قدیمی</option>
-                  <option value="scoreDesc">نمره: زیاد به کم</option>
-                  <option value="scoreAsc">نمره: کم به زیاد</option>
-                </select>
-              </div>
-            </div>
-
-            <label className="flex cursor-pointer items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-300">
-              <input
-                type="checkbox"
-                checked={includeGroupHeader}
-                onChange={(e) => setIncludeGroupHeader(e.target.checked)}
-                className="h-3.5 w-3.5 accent-emerald-600"
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailBox
+                title="🔥 عادت‌ها"
+                lines={
+                  detail.habitsTotal === 0
+                    ? [EMPTY_LABEL]
+                    : [
+                        `انجام‌شده (${toFa(detail.habitsDone)}): ${detail.habitsDoneTitles.join('، ') || EMPTY_LABEL}`,
+                        `انجام‌نشده (${toFa(detail.habitsMissedTitles.length)}): ${detail.habitsMissedTitles.join('، ') || EMPTY_LABEL}`,
+                      ]
+                }
               />
-              درج سرصفحه و آمار کلی در ابتدای خروجی
-            </label>
-
-            <div className="flex gap-2">
-              <Btn onClick={copyOutput} disabled={!outputText} className="flex-1">
-                {copied ? <><CheckCheck size={15} /> کپی شد!</> : <><Copy size={15} /> کپی همه</>}
-              </Btn>
-              <Btn variant="outline" onClick={downloadOutput} disabled={!outputText}>
-                <Download size={15} /> فایل
-              </Btn>
+              <DetailBox
+                title="✅ تسک‌ها"
+                lines={
+                  detail.tasksTotal === 0
+                    ? [EMPTY_LABEL]
+                    : detail.tasks.map(
+                        (t) => `${t.status === 'done' ? '✔' : '○'} ${t.title}${t.time ? ` — ساعت ${formatClock24(t.time)}` : ''}`,
+                      )
+                }
+              />
+              <DetailBox
+                title="📅 رویدادها"
+                lines={
+                  detail.events.length === 0
+                    ? [EMPTY_LABEL]
+                    : detail.events.map((e) => `${e.title}${e.time ? ` — ساعت ${formatClock24(e.time)}` : ' — بدون ساعت'}`)
+                }
+              />
+              <DetailBox
+                title="🌙 حس کلی روز"
+                lines={[detail.hasReflection ? 'این روز بازتاب دارد' : 'برای این روز بازتابی ثبت نشده است']}
+              />
             </div>
-            <p className="flex items-start gap-1.5 text-[10px] leading-5 text-slate-400">
-              <Info size={13} className="mt-0.5 shrink-0" />
-              {style === 'csv'
-                ? 'خروجی CSV برای اکسل مناسب است (با BOM تا فارسی درست نمایش داده شود).'
-                : 'خروجی متنی را می‌توانید در یادداشت، تلگرام یا گزارش روزانه بچسبانید.'}
-            </p>
-          </div>
 
-          {/* پیش‌نمایش */}
-          <div className="lg:col-span-3">
-            <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-[11px] font-black text-slate-500">پیش‌نمایش خروجی</p>
-              <span className="tabular text-[10px] font-bold text-slate-400">
-                {outputText ? `${toFa(outputText.split('\n').length)} خط • ${toFa(outputText.length)} نویسه` : 'خالی'}
-              </span>
-            </div>
-            {outputText ? (
-              <pre
-                dir="rtl"
-                className="max-h-[420px] overflow-auto rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-[12px] leading-7 whitespace-pre-wrap text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-200"
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3 dark:border-white/5">
+              <Btn
+                variant="outline"
+                onClick={async () => {
+                  const ok = await copyText(buildDayBlock(detail, opts));
+                  notify(ok ? 'خلاصه این روز کپی شد' : 'کپی نشد');
+                }}
               >
-                {outputText}
-              </pre>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 py-12 text-center text-xs text-slate-400 dark:border-white/10">
-                <FileText size={24} className="mx-auto mb-2 opacity-60" />
-                برای ساخت خروجی، روزهایی را انتخاب کنید یا منبع را روی «همه بازه» بگذارید
-              </div>
-            )}
+                <Copy size={15} /> کپی خلاصه این روز
+              </Btn>
+              <Btn
+                variant="soft"
+                onClick={() => {
+                  toggleDay(detail.day);
+                  notify(selected.has(detail.day) ? 'از انتخاب حذف شد' : 'به انتخاب اضافه شد');
+                }}
+              >
+                <Check size={15} /> {selected.has(detail.day) ? 'حذف از انتخاب' : 'افزودن به انتخاب'}
+              </Btn>
+            </div>
           </div>
-        </div>
-      </Card>
-
-      {/* ── جدول‌های هفتگی و ماهانه ─────────────────────── */}
-      <div className="grid gap-5 xl:grid-cols-2">
-        <WeeklyTable stats={stats} weekStart={weekStart} onPickWeek={(r) => { setPreset('custom'); setCustom(r); }} />
-        <MonthlyTable stats={stats} onPickMonth={(r) => { setPreset('custom'); setCustom(r); }} />
-      </div>
+        )}
+      </Modal>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// اجزای کمکی
-// ═══════════════════════════════════════════════════════════════
-
-/** تعیین روزهای خروجی بر اساس منبع انتخاب‌شده */
-function computeOutputDays(
-  source: 'selected' | 'rangeScored' | 'rangeAll' | 'weeks' | 'months',
-  selectedDays: number[],
-  scored: Array<{ day: number }>,
-  rangeDays: number[],
-): number[] {
-  if (source === 'selected') return selectedDays;
-  if (source === 'rangeScored') return scored.map((d) => d.day);
-  if (source === 'rangeAll') return rangeDays;
-  return [];
-}
-
-const allTrue: FieldFlags = {
-  score: true, mood: true, basics: true, progress: true, dayNote: true, wins: true, improve: true, lessons: true, gratitude: true,
-};
-const allFalse: FieldFlags = {
-  score: false, mood: false, basics: false, progress: false, dayNote: false, wins: false, improve: false, lessons: false, gratitude: false,
-};
-
-/** بازه کامل یک ماه شمسی مشخص */
-function monthRangeOf(jy: number, jm: number): DRange {
-  const start = startOfDay(toGregorian(jy, jm, 1).getTime());
-  const next = addMonthsJalali(jy, jm, 1);
-  const end = startOfDay(toGregorian(next.jy, next.jm, 1).getTime()) - 1;
-  return { start, end };
-}
-
-function StatTile({
-  icon, label, value, sub, tone,
+// ── اجزای کمکی ────────────────────────────────────────────────
+function Kpi({
+  icon, label, value, sub, c, tone = 'slate',
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  sub: string;
-  tone: 'green' | 'rose' | 'amber' | 'violet' | 'slate';
+  sub?: string;
+  c: string;
+  tone?: 'slate' | 'green' | 'red';
 }) {
-  const tones: Record<string, string> = {
-    green: 'from-emerald-500 to-teal-600 shadow-emerald-600/20',
-    rose: 'from-rose-500 to-pink-600 shadow-rose-600/20',
-    amber: 'from-amber-500 to-orange-600 shadow-amber-600/20',
-    violet: 'from-violet-500 to-purple-600 shadow-violet-600/20',
-    slate: 'from-slate-400 to-slate-600 shadow-slate-600/20',
-  };
+  const toneCls = tone === 'green' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'red' ? 'text-rose-500' : 'text-slate-400';
   return (
     <Card hover className="p-4">
-      <div className={cx('mb-3 grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-lg', tones[tone])}>
-        {icon}
-      </div>
+      <span className={cx('mb-2.5 grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-md', c)}>{icon}</span>
       <p className="text-[11px] font-bold text-slate-400">{label}</p>
-      <p className="tabular mt-1 text-[16px] font-black text-slate-800 dark:text-white">{value}</p>
-      <p className="mt-1 text-[11px] leading-5 text-slate-400">{sub}</p>
+      <p className="tabular mt-1 text-[15px] font-black text-slate-800 dark:text-white">{value}</p>
+      {sub && <p className={cx('mt-1 text-[11px] font-bold', toneCls)}>{sub}</p>}
     </Card>
   );
 }
 
-function ExtremeRow({ title, day, score, tone }: { title: string; day: number | null; score: number | null; tone: 'green' | 'rose' }) {
+function MiniStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className={cx('flex items-center gap-3 rounded-2xl border p-3', tone === 'green' ? 'border-emerald-500/20 bg-emerald-500/[0.05]' : 'border-rose-500/20 bg-rose-500/[0.05]')}>
-      <span className={cx('grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white', tone === 'green' ? 'bg-emerald-500' : 'bg-rose-500')}>
-        <Star size={16} />
-      </span>
+    <div className="rounded-2xl bg-slate-50 px-3 py-2.5 dark:bg-white/5">
+      <p className="tabular text-base font-black text-slate-800 dark:text-white">{value}</p>
+      <p className="mt-0.5 text-[10px] font-bold text-slate-400">{label}</p>
+      {hint && <p className="mt-0.5 text-[10px] text-slate-400">{hint}</p>}
+    </div>
+  );
+}
+
+function PeriodRow({
+  label, sub, score, tasksPct, habitRate, onPick,
+}: {
+  label: string;
+  sub: string;
+  score: number | null;
+  tasksPct: number | null;
+  habitRate: number | null;
+  onPick: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-100 px-3.5 py-2.5 dark:border-white/5">
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-bold text-slate-400">{title}</p>
-        <p className="truncate text-[13px] font-black text-slate-700 dark:text-slate-100">
-          {day != null ? formatJalali(day, { weekday: true }) : NOT_RECORDED}
+        <p className="text-[13px] font-black text-slate-700 dark:text-slate-200">{label}</p>
+        <p className="mt-0.5 text-[10px] text-slate-400">{sub}</p>
+      </div>
+      <span className="tabular flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-700 dark:text-amber-300">
+        <Star size={11} /> {score != null ? formatScore(score) : EMPTY_LABEL}
+      </span>
+      <span className="tabular flex items-center gap-1 rounded-full bg-sky-500/10 px-2.5 py-1 text-[11px] font-black text-sky-700 dark:text-sky-300">
+        <Target size={11} /> {tasksPct != null ? `${toFa(tasksPct)}٪` : EMPTY_LABEL}
+      </span>
+      <span className="tabular flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-700 dark:text-emerald-300">
+        <Flame size={11} /> {habitRate != null ? `${toFa(habitRate)}٪` : EMPTY_LABEL}
+      </span>
+      <button
+        onClick={onPick}
+        className="rounded-lg px-2 py-1 text-[10px] font-bold text-slate-400 transition hover:bg-emerald-500/10 hover:text-emerald-600"
+        title="انتخاب روزهای این بازه برای خروجی"
+      >
+        انتخاب روزها
+      </button>
+    </div>
+  );
+}
+
+function CompareRow({
+  label, now, prev, format,
+}: {
+  label: string;
+  now: number | null;
+  prev: number | null;
+  format: (v: number) => string;
+}) {
+  const delta = now != null && prev != null ? Math.round((now - prev) * 10) / 10 : null;
+  return (
+    <div className="flex items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-[12px] font-bold text-slate-600 dark:text-slate-300">{label}</p>
+        <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+          {prev != null && (
+            <div className="h-full bg-slate-300 dark:bg-white/25" style={{ width: `${Math.min(100, (prev / Math.max(now ?? 0, prev, 1)) * 100)}%` }} />
+          )}
+          {now != null && (
+            <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, (now / Math.max(now ?? 0, prev ?? 0, 1)) * 100)}%` }} />
+          )}
+        </div>
+      </div>
+      <div className="w-28 shrink-0 text-left">
+        <p className="tabular text-[12px] font-black text-slate-700 dark:text-slate-100">
+          {now != null ? format(now) : EMPTY_LABEL}
+        </p>
+        <p className={cx('tabular text-[10px] font-bold', delta == null ? 'text-slate-400' : delta > 0 ? 'text-emerald-500' : delta < 0 ? 'text-rose-500' : 'text-slate-400')}>
+          {delta == null ? '—' : `${delta > 0 ? '▲' : delta < 0 ? '▼' : '●'} ${formatScore(Math.abs(delta))} نسبت به قبل`}
         </p>
       </div>
-      <ScorePill score={score} />
     </div>
   );
 }
 
-function AvgSleepRow({ stats }: { stats: DayStats[] }) {
-  const durs = stats.map((d) => sleepDurationMin(d.reflection?.wake, d.reflection?.sleep)).filter((x): x is number => x != null);
-  const m = avg(durs);
-  return (
-    <div className="rounded-2xl bg-slate-50 p-3.5 text-[11px] text-slate-500 dark:bg-white/5 dark:text-slate-400">
-      میانگین خواب شبانه:{' '}
-      <b className="tabular text-slate-700 dark:text-slate-200">
-        {m != null ? `${toFa((m / 60).toFixed(1))} ساعت` : NOT_RECORDED}
-      </b>
-      <span className="text-slate-400"> ({toFa(durs.length)} شب ثبت‌شده)</span>
-    </div>
-  );
-}
-
-function ScoreBars({ stats, selected, onPick }: { stats: DayStats[]; selected: Set<number>; onPick: (day: number) => void }) {
-  const maxDay = stats.length;
-  const barW = Math.max(6, Math.min(26, Math.floor(560 / Math.max(maxDay, 1)) - 3));
-  return (
-    <div className="overflow-x-auto pb-1">
-      <div className="flex items-end gap-1" style={{ minWidth: maxDay * (barW + 3) }}>
-        {stats.map((d) => {
-          const isSel = selected.has(d.day);
-          const h = d.score != null ? 12 + (d.score / SCORE_MAX) * 110 : 6;
-          const color = d.score == null ? '#cbd5e1' : d.score >= 8 ? '#10b981' : d.score >= 5 ? '#f59e0b' : '#f43f5e';
-          return (
-            <button
-              key={d.day}
-              onClick={() => onPick(d.day)}
-              title={`${formatJalali(d.day, { weekday: true })} — نمره: ${d.score != null ? formatScore(d.score) : NOT_RECORDED}${isSel ? ' (انتخاب‌شده)' : ''}`}
-              className="group flex shrink-0 flex-col items-center gap-1"
-              style={{ width: barW }}
-            >
-              <span className="tabular text-[9px] font-black text-slate-400 opacity-0 transition group-hover:opacity-100">
-                {d.score != null ? formatScore(d.score) : '—'}
-              </span>
-              <span
-                className={cx('w-full rounded-t-md transition-all', isSel && 'ring-2 ring-emerald-500 ring-offset-1 dark:ring-offset-slate-900')}
-                style={{ height: h, background: color, opacity: d.score == null ? 0.4 : 1 }}
-              />
-              <span className={cx('tabular text-[9px] font-bold', isSel ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400')}>
-                {toFa(toJalaali(new Date(d.day)).jd)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function CustomRangePicker({ value, onChange, max }: { value: DRange; onChange: (r: DRange) => void; max: number }) {
-  const [err, setErr] = useState('');
-  const setStart = (ts: number) => {
-    if (ts > value.end) { setErr('روز شروع نمی‌تواند بعد از روز پایان باشد'); return; }
-    setErr('');
-    onChange({ ...value, start: ts });
-  };
-  const setEnd = (ts: number) => {
-    if (ts < value.start) { setErr('روز پایان نمی‌تواند قبل از روز شروع باشد'); return; }
-    setErr('');
-    onChange({ ...value, end: ts });
-  };
-  return (
-    <div className="mt-3 rounded-2xl border border-slate-100 p-3 dark:border-white/5">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <p className="mb-1.5 text-[11px] font-bold text-slate-500">از روز</p>
-          <JalaliDayPicker value={value.start} onChange={setStart} max={max} />
-        </div>
-        <div>
-          <p className="mb-1.5 text-[11px] font-bold text-slate-500">تا روز</p>
-          <JalaliDayPicker value={value.end} onChange={setEnd} max={max} />
-        </div>
-      </div>
-      {err && <p className="mt-2 text-[11px] font-bold text-rose-500">{err}</p>}
-    </div>
-  );
-}
-
-/** انتخاب‌گر روز شمسی سبک: یک ورودی عددی روز + ماه + سال */
-function JalaliDayPicker({ value, onChange, max }: { value: number; onChange: (ts: number) => void; max: number }) {
-  const j = toJalaali(new Date(value));
-  const years: number[] = [];
-  const baseYear = toJalaali(new Date(max)).jy;
-  for (let y = baseYear - 6; y <= baseYear + 2; y++) years.push(y);
-  const commit = (jy: number, jm: number, jd: number) => {
-    try {
-      const ts = startOfDay(toGregorian(jy, jm, jd).getTime());
-      onChange(Math.min(ts, max));
-    } catch {
-      /* تاریخ نامعتبر */
-    }
-  };
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      <input
-        type="number"
-        min={1}
-        max={31}
-        value={j.jd}
-        onChange={(e) => commit(j.jy, j.jm, Math.max(1, Math.min(31, Number(e.target.value) || 1)))}
-        className="tabular h-9 rounded-xl border border-slate-200 bg-slate-50/60 px-2 text-center text-xs font-bold dark:border-white/10 dark:bg-white/5"
-        aria-label="روز"
-      />
-      <select
-        value={j.jm}
-        onChange={(e) => commit(j.jy, Number(e.target.value), j.jd)}
-        className="h-9 rounded-xl border border-slate-200 bg-slate-50/60 px-2 text-xs font-bold dark:border-white/10 dark:bg-white/5"
-        aria-label="ماه"
-      >
-        {J_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-      </select>
-      <select
-        value={j.jy}
-        onChange={(e) => commit(Number(e.target.value), j.jm, j.jd)}
-        className="tabular h-9 rounded-xl border border-slate-200 bg-slate-50/60 px-2 text-xs font-bold dark:border-white/10 dark:bg-white/5"
-        aria-label="سال"
-      >
-        {years.map((y) => <option key={y} value={y}>{toFa(y)}</option>)}
-      </select>
-    </div>
-  );
-}
-
-/** تقویم ماهانه با نمایش نمره روزها و امکان انتخاب */
-function ScoreCalendar({
-  selected, onToggle, onSelectRange, refMap, weekStart, onJumpRange,
+function OptRow({
+  label, icon, checked, onChange,
 }: {
-  selected: Set<number>;
-  onToggle: (day: number) => void;
-  onSelectRange: (days: number[]) => void;
-  refMap: Map<number, { score?: number | null; mood: number }>;
-  weekStart: 'sat' | 'mon';
-  onJumpRange: (r: DRange) => void;
+  label: string;
+  icon: React.ReactNode;
+  checked: boolean;
+  onChange: (v: boolean) => void;
 }) {
-  const nowJ = toJalaali(new Date());
-  const [jy, setJy] = useState(nowJ.jy);
-  const [jm, setJm] = useState(nowJ.jm);
-
-  const grid = useMemo(() => getMonthGrid(jy, jm, weekStart), [jy, jm, weekStart]);
-  const inMonth = grid.filter((c) => c.inMonth);
-  const monthScores = inMonth.map((c) => refMap.get(c.ts)?.score).filter((s): s is number => s != null);
-  const monthAvg = avg(monthScores);
-  const weekLabels = weekStart === 'mon' ? ['د', 'س', 'چ', 'پ', 'ج', 'ش', 'ی'] : J_WEEKDAYS_SHORT;
-
-  const shift = (delta: number) => {
-    const n = addMonthsJalali(jy, jm, delta);
-    setJy(n.jy); setJm(n.jm);
-  };
-  const goToday = () => { setJy(nowJ.jy); setJm(nowJ.jm); };
-  const monthRange: DRange = { start: inMonth[0]?.ts ?? todayStart(), end: inMonth[inMonth.length - 1]?.ts ?? todayStart() };
-
   return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2 px-5 pt-5 pb-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] font-extrabold text-slate-800 dark:text-slate-100">
-            تقویم نمره — {J_MONTHS[jm - 1]} {toFa(jy)}
-          </h3>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {monthAvg != null
-              ? `میانگین این ماه: ${formatScore(monthAvg)} از ۱۰ • ${toFa(monthScores.length)} روز نمره‌دار`
-              : 'در این ماه نمره‌ای ثبت نشده است'}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => shift(-1)} aria-label="ماه قبل" className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
-            <ChevronRight size={17} />
-          </button>
-          <Btn size="sm" variant="soft" onClick={goToday}>این ماه</Btn>
-          <button onClick={() => shift(1)} aria-label="ماه بعد" className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
-            <ChevronLeft size={17} />
-          </button>
-        </div>
-      </div>
-
-      <div className="px-3 pb-3 sm:px-5">
-        <div className="grid grid-cols-7 gap-1">
-          {weekLabels.map((w, i) => (
-            <div key={w + i} className={cx('py-1.5 text-center text-[11px] font-black', (weekStart === 'sat' ? i === 6 : i === 5) ? 'text-rose-400' : 'text-slate-400')}>{w}</div>
-          ))}
-          {grid.map((cell, i) => {
-            const ref = refMap.get(cell.ts);
-            const score = ref?.score ?? null;
-            const isSel = selected.has(cell.ts);
-            const isToday = cell.ts === todayStart();
-            const isFuture = cell.ts > todayStart();
-            return (
-              <motion.button
-                key={i}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: Math.min(i * 0.003, 0.12) }}
-                onClick={() => onToggle(cell.ts)}
-                onDoubleClick={() => onJumpRange({ start: cell.ts, end: cell.ts })}
-                title={`${formatJalali(cell.ts, { weekday: true })} — نمره: ${score != null ? `${
-                  formatScore(score)} از ۱۰` : NOT_RECORDED}${ref ? ` • حال: ${moodLabel(ref.mood)}` : ''}${isSel ? ' • انتخاب‌شده' : ''}`}
-                className={cx(
-                  'relative flex min-h-[58px] flex-col items-center justify-center rounded-xl border-2 p-1 transition-all sm:min-h-[72px]',
-                  isSel
-                    ? 'border-violet-500 bg-violet-500/10 shadow-md shadow-violet-500/10'
-                    : score != null
-                      ? `${heatTone(score)} border-transparent`
-                      : 'border-transparent hover:border-slate-200 hover:bg-slate-50 dark:hover:border-white/10 dark:hover:bg-white/5',
-                  !cell.inMonth && 'opacity-30',
-                  isFuture && !isSel && 'opacity-45',
-                )}
-              >
-                <span
-                  className={cx(
-                    'tabular grid h-6 w-6 place-items-center rounded-full text-[12px] font-black',
-                    isToday ? 'bg-emerald-500 text-white'
-                      : !cell.inMonth ? 'text-slate-500'
-                        : 'text-slate-700 dark:text-slate-200',
-                  )}
-                >
-                  {toFa(cell.jd)}
-                </span>
-                {score != null ? (
-                  <span className="tabular mt-0.5 rounded-full bg-white/70 px-1.5 text-[10px] font-black text-slate-700 dark:bg-slate-900/60 dark:text-slate-100">
-                    {formatScore(score)}
-                  </span>
-                ) : (
-                  <span className="mt-0.5 text-[9px] font-bold text-slate-400">{ref ? 'بدون نمره' : 'ثبت نشده'}</span>
-                )}
-                {isSel && (
-                  <span className="absolute -top-1 -left-1 grid h-4 w-4 place-items-center rounded-full bg-violet-500 text-white">
-                    <CheckCheck size={10} />
-                  </span>
-                )}
-              </motion.button>
-            );
-          })}
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-          <button onClick={() => onSelectRange(inMonth.map((c) => c.ts))} className="rounded-xl bg-violet-500/10 px-2.5 py-1 font-bold text-violet-700 transition hover:bg-violet-500/20 dark:text-violet-300">
-            انتخاب کل این ماه
-          </button>
-          <button onClick={() => onJumpRange(monthRange)} className="rounded-xl bg-slate-100 px-2.5 py-1 font-bold text-slate-600 transition hover:bg-slate-200 dark:bg-white/10 dark:text-slate-300">
-            نمایش این ماه در بازه
-          </button>
-          <span className="flex-1" />
-          <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded bg-emerald-500/40" /> نمره بالا</span>
-          <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded bg-amber-500/30" /> متوسط</span>
-          <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded bg-rose-500/25" /> پایین</span>
-          <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded border border-dashed border-slate-300 dark:border-white/20" /> بدون نمره</span>
-        </div>
-        <p className="mt-2 text-[10px] text-slate-400">یک کلیک = انتخاب/لغو انتخاب روز • دابل‌کلیک = محدود کردن بازه به همان روز</p>
-      </div>
-    </Card>
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={cx(
+        'flex items-center gap-2 rounded-xl border px-3 py-2 text-right text-[11px] font-bold transition',
+        checked
+          ? 'border-emerald-500 bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-300'
+          : 'border-slate-200 text-slate-400 hover:border-slate-300 dark:border-white/10 dark:text-slate-400',
+      )}
+    >
+      <span className={cx('grid h-5 w-5 shrink-0 place-items-center rounded-md border', checked ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-white/20')}>
+        {checked && <CheckIcon size={11} />}
+      </span>
+      {icon}
+      <span className="flex-1">{label}</span>
+    </button>
   );
 }
 
-function heatTone(score: number): string {
-  if (score >= 8.5) return 'bg-emerald-500/45 dark:bg-emerald-500/35';
-  if (score >= 7) return 'bg-emerald-500/30 dark:bg-emerald-500/22';
-  if (score >= 5) return 'bg-amber-500/25 dark:bg-amber-500/18';
-  if (score >= 3) return 'bg-rose-500/20 dark:bg-rose-500/15';
-  return 'bg-rose-500/30 dark:bg-rose-500/22';
-}
-
-/** جدول هفتگی: میانگین نمره، حال، تسک و عادت هر هفته */
-function WeeklyTable({ stats, weekStart, onPickWeek }: { stats: DayStats[]; weekStart: 'sat' | 'mon'; onPickWeek: (r: DRange) => void }) {
-  const weeks = useMemo(() => {
-    const map = new Map<number, DayStats[]>();
-    for (const s of stats) {
-      const key = startOfWeek(s.day, weekStart);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(s);
-    }
-    return [...map.entries()]
-      .sort((a, b) => b[0] - a[0])
-      .map(([start, items]) => {
-        const scores = items.map((d) => d.score).filter((x): x is number => x != null);
-        const mood = items.map((d) => d.mood).filter((x): x is number => x != null);
-        const tasks = items.filter((d) => d.total > 0);
-        return {
-          start,
-          end: addDays(start, 6),
-          days: items.length,
-          scored: scores.length,
-          avgScore: avg(scores),
-          avgMood: avg(mood),
-          taskRate: tasks.length ? Math.round(avg(tasks.map((d) => d.pct)) ?? 0) : null,
-          habits: items.reduce((a, d) => a + d.habitsDone, 0),
-          habitsTotal: items.reduce((a, d) => a + d.habitsTotal, 0),
-          sport: items.filter((d) => d.sport).length,
-        };
-      });
-  }, [stats, weekStart]);
-
+function DetailBox({ title, lines }: { title: string; lines: string[] }) {
   return (
-    <Card>
-      <CardHead title="تحلیل هفتگی" sub="مقایسه هفته‌های بازه انتخابی — روی هر ردیف کلیک کنید تا بازه به همان هفته محدود شود" />
-      <div className="overflow-x-auto px-5 pb-5">
-        {weeks.length === 0 ? (
-          <p className="py-8 text-center text-xs text-slate-400">داده‌ای برای نمایش نیست</p>
-        ) : (
-          <table className="w-full min-w-[520px] text-right text-xs">
-            <thead>
-              <tr className="border-b border-slate-100 text-slate-400 dark:border-white/10">
-                <th className="py-2.5 font-bold">هفته</th>
-                <th className="py-2.5 font-bold">روز</th>
-                <th className="py-2.5 font-bold">میانگین نمره</th>
-                <th className="py-2.5 font-bold">حال</th>
-                <th className="py-2.5 font-bold">تسک‌ها</th>
-                <th className="py-2.5 font-bold">عادت‌ها</th>
-                <th className="py-2.5 font-bold">ورزش</th>
-              </tr>
-            </thead>
-            <tbody>
-              {weeks.map((w) => (
-                <tr
-                  key={w.start}
-                  onClick={() => onPickWeek({ start: w.start, end: w.end })}
-                  className="cursor-pointer border-b border-slate-50 transition hover:bg-slate-50/70 last:border-0 dark:border-white/5 dark:hover:bg-white/[0.03]"
-                >
-                  <td className="py-2.5 font-black text-slate-700 dark:text-slate-200">{rangeLabel(w.start, w.end)}</td>
-                  <td className="tabular py-2.5 text-slate-500">{toFa(w.days)}</td>
-                  <td className="py-2.5">
-                    <div className="flex items-center gap-2">
-                      <span className="tabular w-9 font-black text-slate-700 dark:text-slate-100">
-                        {w.avgScore != null ? formatScore(w.avgScore) : '—'}
-                      </span>
-                      <div className="w-16">
-                        <Progress value={w.avgScore != null ? (w.avgScore / SCORE_MAX) * 100 : 0} h={6} color={w.avgScore != null && w.avgScore >= 7 ? '#10b981' : '#f59e0b'} />
-                      </div>
-                      <span className="tabular text-[10px] text-slate-400">{toFa(w.scored)} روز</span>
-                    </div>
-                  </td>
-                  <td className="py-2.5">{w.avgMood != null ? `${moodFace(Math.round(w.avgMood))} ${formatScore(w.avgMood)}` : '—'}</td>
-                  <td className="tabular py-2.5 text-slate-600 dark:text-slate-300">{w.taskRate != null ? `${toFa(w.taskRate)}٪` : '—'}</td>
-                  <td className="tabular py-2.5 text-slate-600 dark:text-slate-300">{w.habitsTotal ? `${toFa(w.habits)}/${toFa(w.habitsTotal)}` : '—'}</td>
-                  <td className="tabular py-2.5 text-slate-600 dark:text-slate-300">{toFa(w.sport)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </Card>
+    <div className="rounded-2xl border border-slate-100 p-3.5 dark:border-white/5">
+      <p className="mb-1.5 text-[11px] font-black text-slate-500">{title}</p>
+      <ul className="space-y-1">
+        {lines.map((l, i) => (
+          <li key={i} className="text-[12px] leading-6 text-slate-600 dark:text-slate-300">{l}</li>
+        ))}
+      </ul>
+    </div>
   );
-}
-
-/** جدول ماهانه شمسی */
-function MonthlyTable({ stats, onPickMonth }: { stats: DayStats[]; onPickMonth: (r: DRange) => void }) {
-  const months = useMemo(() => {
-    const map = new Map<string, { start: number; end: number; jy: number; jm: number; items: DayStats[] }>();
-    for (const s of stats) {
-      const m = jalaliMonthRange(s.day);
-      const key = `${m.jy}-${m.jm}`;
-      const cur = map.get(key) ?? { start: m.start, end: m.end, jy: m.jy, jm: m.jm, items: [] };
-      cur.items.push(s);
-      map.set(key, cur);
-    }
-    return [...map.values()]
-      .sort((a, b) => b.jy - a.jy || b.jm - a.jm)
-      .map((m) => {
-        const scores = m.items.map((d) => d.score).filter((x): x is number => x != null);
-        const mood = m.items.map((d) => d.mood).filter((x): x is number => x != null);
-        return {
-          ...m,
-          scored: scores.length,
-          avgScore: avg(scores),
-          avgMood: avg(mood),
-          habits: m.items.reduce((a, d) => a + d.habitsDone, 0),
-          habitsTotal: m.items.reduce((a, d) => a + d.habitsTotal, 0),
-          sport: m.items.filter((d) => d.sport).length,
-        };
-      });
-  }, [stats]);
-
-  return (
-    <Card>
-      <CardHead title="تحلیل ماهانه" sub="نمره و سبک زندگی در ماه‌های شمسی بازه انتخابی" />
-      <div className="overflow-x-auto px-5 pb-5">
-        {months.length === 0 ? (
-          <p className="py-8 text-center text-xs text-slate-400">داده‌ای برای نمایش نیست</p>
-        ) : (
-          <table className="w-full min-w-[460px] text-right text-xs">
-            <thead>
-              <tr className="border-b border-slate-100 text-slate-400 dark:border-white/10">
-                <th className="py-2.5 font-bold">ماه</th>
-                <th className="py-2.5 font-bold">روزهای بازه</th>
-                <th className="py-2.5 font-bold">نمره‌دار</th>
-                <th className="py-2.5 font-bold">میانگین نمره</th>
-                <th className="py-2.5 font-bold">میانگین حال</th>
-                <th className="py-2.5 font-bold">عادت‌ها</th>
-                <th className="py-2.5 font-bold">ورزش</th>
-              </tr>
-            </thead>
-            <tbody>
-              {months.map((m) => (
-                <tr
-                  key={`${m.jy}-${m.jm}`}
-                  onClick={() => onPickMonth({ start: m.start, end: m.end })}
-                  className="cursor-pointer border-b border-slate-50 transition hover:bg-slate-50/70 last:border-0 dark:border-white/5 dark:hover:bg-white/[0.03]"
-                >
-                  <td className="py-2.5 font-black text-slate-700 dark:text-slate-200">{J_MONTHS[m.jm - 1]} {toFa(m.jy)}</td>
-                  <td className="tabular py-2.5 text-slate-500">{toFa(m.items.length)}</td>
-                  <td className="tabular py-2.5 text-slate-500">{toFa(m.scored)}</td>
-                  <td className="tabular py-2.5 font-black text-slate-700 dark:text-slate-100">{m.avgScore != null ? formatScore(m.avgScore) : '—'}</td>
-                  <td className="py-2.5">{m.avgMood != null ? `${moodFace(Math.round(m.avgMood))} ${formatScore(m.avgMood)}` : '—'}</td>
-                  <td className="tabular py-2.5 text-slate-600 dark:text-slate-300">{m.habitsTotal ? `${toFa(m.habits)}/${toFa(m.habitsTotal)}` : '—'}</td>
-                  <td className="tabular py-2.5 text-slate-600 dark:text-slate-300">{toFa(m.sport)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-// ── سازنده‌های خروجی ────────────────────────────────────────
-type SummaryState = {
-  reflections: import('../lib/types').DayReflection[];
-  tasks: import('../lib/types').Task[];
-  habits: import('../lib/types').Habit[];
-  habitLogs: Record<string, boolean>;
-};
-
-function ctxOf(state: SummaryState) {
-  return { reflections: state.reflections, tasks: state.tasks, habits: state.habits, habitLogs: state.habitLogs };
-}
-
-function buildWeeksSummary(days: number[], state: SummaryState, opts: MultiSummaryOptions): string {
-  const map = new Map<number, number[]>();
-  for (const d of days) {
-    const key = startOfWeek(d, 'sat');
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(d);
-  }
-  const weeks = [...map.entries()].sort((a, b) => a[0] - b[0]);
-  const blocks = weeks.map(([start, list]) => {
-    const end = list[list.length - 1];
-    return buildMultiDaySummary(list, ctxOf(state), {
-      ...opts,
-      groupHeader: false,
-      title: `هفته ${rangeLabel(start, end)}`,
-    });
-  });
-  const head = opts.style === 'markdown'
-    ? `## خلاصه هفتگی (${toFa(weeks.length)} هفته)\n${rangeLabel(days[0], days[days.length - 1])}`
-    : `━━━━ خلاصه هفتگی (${toFa(weeks.length)} هفته) ━━━━\n${rangeLabel(days[0], days[days.length - 1])}`;
-  return `${head}\n\n${blocks.join('\n\n════════════════════\n\n')}`;
-}
-
-function buildMonthsSummary(days: number[], state: SummaryState, opts: MultiSummaryOptions): string {
-  const map = new Map<string, { start: number; jy: number; jm: number; list: number[] }>();
-  for (const d of days) {
-    const m = jalaliMonthRange(d);
-    const key = `${m.jy}-${m.jm}`;
-    const cur = map.get(key) ?? { start: m.start, jy: m.jy, jm: m.jm, list: [] };
-    cur.list.push(d);
-    map.set(key, cur);
-  }
-  const months = [...map.values()].sort((a, b) => a.jy - b.jy || a.jm - b.jm);
-  const blocks = months.map((m) => buildMultiDaySummary(m.list, ctxOf(state), {
-    ...opts,
-    groupHeader: false,
-    title: `${J_MONTHS[m.jm - 1]} ${toFa(m.jy)}`,
-  }));
-  const head = opts.style === 'markdown'
-    ? `## خلاصه ماهانه (${toFa(months.length)} ماه)`
-    : `━━━━ خلاصه ماهانه (${toFa(months.length)} ماه) ━━━━`;
-  return `${head}\n\n${blocks.join('\n\n════════════════════\n\n')}`;
-}
-
-function buildCsvText(
-  source: string,
-  days: number[],
-  stats: DayStats[],
-  fields: FieldFlags,
-  weekStart: 'sat' | 'mon',
-): string {
-  if (source === 'selected' || source === 'rangeScored' || source === 'rangeAll') {
-    const rows = stats.map((d) => {
-      const r = d.reflection;
-      const row: Record<string, string | number> = {
-        تاریخ: formatJalali(d.day),
-        کد: formatJalaliShort(d.day),
-        روز_هفته: weekdayName(d.day),
-      };
-      if (fields.score) row['نمره_۰تا۱۰'] = d.score != null ? d.score : 'ثبت نشده';
-      if (fields.mood) row['حال_روز'] = r?.mood != null ? moodLabel(r.mood) : 'ثبت نشده';
-      if (fields.progress) {
-        row['تسک_انجام‌شده'] = d.total ? `${d.done} از ${d.total}` : 'ثبت نشده';
-        row['عادت_انجام‌شده'] = d.habitsTotal ? `${d.habitsDone} از ${d.habitsTotal}` : 'ثبت نشده';
-      }
-      if (fields.basics) {
-        row['ساعت_بیداری'] = r?.wake ? clockToFa(r.wake) : 'ثبت نشده';
-        row['ساعت_خواب'] = r?.sleep ? clockToFa(r.sleep) : 'ثبت نشده';
-        row['ورزش'] = r?.sport ? (r.sportType || 'بله') : 'ثبت نشده';
-        row['بیرون_رفتن'] = r?.wentOut ? (r.outPlace || 'بله') : 'ثبت نشده';
-      }
-      if (fields.dayNote) row['یادداشت_روز'] = (r?.dayNote ?? '').trim() || 'خالی';
-      if (fields.wins) row['دستاوردها'] = (r?.wins ?? '').trim() || 'خالی';
-      if (fields.improve) row['قابل_بهبود'] = (r?.improve ?? '').trim() || 'خالی';
-      if (fields.lessons) row['درس_آموخته'] = (r?.lessons ?? '').trim() || 'خالی';
-      if (fields.gratitude) row['قدردانی'] = (r?.gratitude ?? '').trim() || 'خالی';
-      row['موارد_ثبت‌نشده'] = missingFields(r).join('، ') || 'هیچ‌کدام';
-      return row;
-    });
-    return exportRowsCsv(rows);
-  }
-
-  // هفتگی/ماهانه: تجمیع
-  const groups = new Map<string, DayStats[]>();
-  for (const d of stats) {
-    const key = source === 'weeks'
-      ? `هفته ${rangeLabel(startOfWeek(d.day, weekStart), addDays(startOfWeek(d.day, weekStart), 6))}`
-      : `${J_MONTHS[jalaliMonthRange(d.day).jm - 1]} ${toFa(jalaliMonthRange(d.day).jy)}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(d);
-  }
-  const rows = [...groups.entries()].map(([label, items]) => {
-    const scores = items.map((d) => d.score).filter((x): x is number => x != null);
-    const row: Record<string, string | number> = { بازه: label, تعداد_روز: items.length };
-    if (fields.score) {
-      row['میانگین_نمره'] = avg(scores) != null ? (avg(scores) as number).toFixed(1) : 'ثبت نشده';
-      row['میانه_نمره'] = median(scores) != null ? (median(scores) as number).toFixed(1) : 'ثبت نشده';
-      row['روزهای_نمره‌دار'] = scores.length;
-    }
-    if (fields.mood) {
-      const moods = items.map((d) => d.mood).filter((x): x is number => x != null);
-      row['میانگین_حال'] = avg(moods) != null ? (avg(moods) as number).toFixed(1) : 'ثبت نشده';
-    }
-    if (fields.progress) {
-      const withTasks = items.filter((d) => d.total > 0);
-      row['میانگین_انجام_تسک'] = withTasks.length ? `${Math.round(avg(withTasks.map((d) => d.pct)) ?? 0)}٪` : 'ثبت نشده';
-      const hab = items.reduce((a, d) => a + d.habitsDone, 0);
-      const habTotal = items.reduce((a, d) => a + d.habitsTotal, 0);
-      row['عادت_ها'] = habTotal ? `${hab} از ${habTotal}` : 'ثبت نشده';
-    }
-    if (fields.basics) {
-      row['روزهای_ورزش'] = items.filter((d) => d.sport).length;
-      row['روزهای_بیرون'] = items.filter((d) => d.wentOut).length;
-    }
-    void days;
-    return row;
-  });
-  return exportRowsCsv(rows);
 }
